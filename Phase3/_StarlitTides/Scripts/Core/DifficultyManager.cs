@@ -1,17 +1,10 @@
-// =============================================================================
-//  DifficultyManager - the game slowly gets faster, denser and hungrier
-// -----------------------------------------------------------------------------
-//  Everything is a function of one number, Level (0 at the start of a run,
-//  1 after 'rampDuration' seconds). Each value has an AnimationCurve you can
-//  reshape in the Inspector; the defaults ease in, so the first minute is
-//  relaxed and minutes 2-4 get intense.
+// DifficultyManager: makes the game harder the longer you survive.
 //
-//      Tide speed (world speed)   7  -> 16 m/s
-//      Light drain per second     3.5% -> 7.5%
-//      Seconds between obstacles  1.7 -> 0.5
-//      Seconds between orb groups 2.4 -> 1.6
-//      Jellyfish / log chance     rises with Level
-// =============================================================================
+// Everything depends on one number, Level:
+//   0 at the start of a run, 1 after "rampDuration" seconds (4 minutes).
+// Each setting below is a (start, max) pair and we blend between them using Level.
+// The ramp curve keeps the first minute relaxed and gets steeper after that.
+
 using UnityEngine;
 
 namespace StarlitTides
@@ -22,48 +15,67 @@ namespace StarlitTides
 
         [Tooltip("Seconds of play until maximum difficulty.")]
         public float rampDuration = 240f;
-        [Tooltip("Tide speed used in the menu / intro (calm drifting sea).")]
+        [Tooltip("Tide speed in the menu and intro (a calm drifting sea).")]
         public float idleTideSpeed = 3f;
 
-        [Header("Ranges (start -> max)")]
-        public Vector2 tideSpeed = new Vector2(7f, 16f);
-        public Vector2 drainPerSecond = new Vector2(0.035f, 0.075f);
-        public Vector2 obstacleInterval = new Vector2(1.7f, 0.5f);
-        public Vector2 orbGroupInterval = new Vector2(2.4f, 1.6f);
+        [Header("Start value (x) -> max value (y)")]
+        public Vector2 tideSpeed = new Vector2(7f, 16f);              // metres per second
+        public Vector2 drainPerSecond = new Vector2(0.035f, 0.075f);  // fraction of the light meter
+        public Vector2 obstacleInterval = new Vector2(1.7f, 0.5f);    // seconds between obstacles
+        public Vector2 orbGroupInterval = new Vector2(2.4f, 1.6f);    // seconds between orb groups
         public Vector2 jellyfishChance = new Vector2(0.1f, 0.4f);
         public Vector2 logChance = new Vector2(0.15f, 0.35f);
 
-        [Header("Shape of the ramp (x = time 0..1, y = level 0..1)")]
+        [Header("Ramp shape (x = time 0..1, y = level 0..1)")]
         public AnimationCurve rampCurve = new AnimationCurve(
-            new Keyframe(0f, 0f, 0f, 0.6f), new Keyframe(0.25f, 0.18f), new Keyframe(0.7f, 0.7f), new Keyframe(1f, 1f, 0.6f, 0f));
+            new Keyframe(0f, 0f, 0f, 0.6f),
+            new Keyframe(0.25f, 0.18f),
+            new Keyframe(0.7f, 0.7f),
+            new Keyframe(1f, 1f, 0.6f, 0f));
 
-        /// <summary>0 = start of a run, 1 = maximum difficulty.</summary>
+        // 0 = start of a run, 1 = hardest.
         public float Level { get; private set; }
 
-        public float TideSpeed => Mathf.Lerp(tideSpeed.x, tideSpeed.y, Level);
-        public float DrainPerSecond => Mathf.Lerp(drainPerSecond.x, drainPerSecond.y, Level);
-        public float ObstacleInterval => Mathf.Lerp(obstacleInterval.x, obstacleInterval.y, Level);
-        public float OrbGroupInterval => Mathf.Lerp(orbGroupInterval.x, orbGroupInterval.y, Level);
-        public float JellyfishChance => Mathf.Lerp(jellyfishChance.x, jellyfishChance.y, Level);
-        public float LogChance => Mathf.Lerp(logChance.x, logChance.y, Level);
+        public float TideSpeed { get { return Mathf.Lerp(tideSpeed.x, tideSpeed.y, Level); } }
+        public float DrainPerSecond { get { return Mathf.Lerp(drainPerSecond.x, drainPerSecond.y, Level); } }
+        public float ObstacleInterval { get { return Mathf.Lerp(obstacleInterval.x, obstacleInterval.y, Level); } }
+        public float OrbGroupInterval { get { return Mathf.Lerp(orbGroupInterval.x, orbGroupInterval.y, Level); } }
+        public float JellyfishChance { get { return Mathf.Lerp(jellyfishChance.x, jellyfishChance.y, Level); } }
+        public float LogChance { get { return Mathf.Lerp(logChance.x, logChance.y, Level); } }
 
-        private void Awake() { Instance = this; }
-        private void OnDestroy() { if (Instance == this) Instance = null; }
-
-        private void Update()
+        void Awake()
         {
-            GameManager gm = GameManager.Instance;
-            OceanController ocean = OceanController.Instance;
+            Instance = this;
+        }
 
-            float t = gm != null ? Mathf.Clamp01(gm.RunTime / rampDuration) : 0f;
+        void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        void Update()
+        {
+            GameManager game = GameManager.Instance;
+
+            // How far through the ramp we are (0..1), shaped by the curve.
+            float t = 0f;
+            if (game != null) t = Mathf.Clamp01(game.RunTime / rampDuration);
             Level = Mathf.Clamp01(rampCurve.Evaluate(t));
 
+            UpdateTideSpeed(game);
+        }
+
+        // The tide speed is the speed the whole world moves toward the boat.
+        void UpdateTideSpeed(GameManager game)
+        {
+            OceanController ocean = OceanController.Instance;
             if (ocean == null) return;
-            float target;
-            if (gm != null && gm.State == GameState.Playing) target = TideSpeed;
-            else if (gm != null && gm.State == GameState.GameOver) target = idleTideSpeed * 0.5f;
-            else target = idleTideSpeed;
-            // ease the world speed so changes never feel like a jolt
+
+            float target = idleTideSpeed;
+            if (game != null && game.State == GameState.Playing) target = TideSpeed;
+            if (game != null && game.State == GameState.GameOver) target = idleTideSpeed * 0.5f;
+
+            // Change speed gradually so it never feels like a jolt.
             ocean.tideSpeed = Mathf.MoveTowards(ocean.tideSpeed, target, 4f * Time.deltaTime);
         }
     }

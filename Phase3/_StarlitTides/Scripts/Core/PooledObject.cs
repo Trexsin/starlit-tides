@@ -1,11 +1,10 @@
-// =============================================================================
-//  PooledObject - remembers which prefab a pooled object came from
-// =============================================================================
+// PooledObject: a small tag the PoolManager puts on every pooled object,
+// so it knows which prefab the object came from.
+
 using UnityEngine;
 
 namespace StarlitTides
 {
-    /// <summary>Remembers which prefab a pooled object came from.</summary>
     public class PooledObject : MonoBehaviour
     {
         [HideInInspector] public GameObject prefab;

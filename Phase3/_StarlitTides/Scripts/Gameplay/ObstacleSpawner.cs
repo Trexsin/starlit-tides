@@ -1,12 +1,12 @@
-// =============================================================================
-//  ObstacleSpawner - rocks, drifting logs and jellyfish
-// -----------------------------------------------------------------------------
-//  Spawns faster as the difficulty rises; jellyfish and logs become more
-//  common over time. Simple fairness rules:
-//    * obstacles never overlap each other
-//    * at least one gap wide enough for the boat always remains in each "row"
-//    * nothing spawns during the first seconds of a run (grace period)
-// =============================================================================
+// ObstacleSpawner: sends rocks, logs and jellyfish down the lane.
+//
+// Obstacles come faster as the difficulty goes up, and jellyfish and logs get
+// more common. Two rules keep it fair:
+//   - obstacles never overlap each other
+//   - there's always a gap wide enough for the boat to get through
+// Nothing spawns during the calm grace period at the start of a run.
+
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace StarlitTides
@@ -19,81 +19,116 @@ namespace StarlitTides
 
         public float spawnZ = 112f;
         public Vector2 laneX = new Vector2(-7.5f, 7.5f);
-        [Tooltip("Minimum free gap (metres) that must stay open across the lane.")]
+        [Tooltip("The smallest free gap (metres) that must always stay open.")]
         public float minimumGap = 3.2f;
         public int prewarmEach = 6;
 
-        private float _timer;
+        float timer;
 
-        private void Start()
+        void Start()
         {
-            foreach (var p in rockPrefabs) PoolManager.Prewarm(p, prewarmEach);
-            foreach (var p in logPrefabs) PoolManager.Prewarm(p, prewarmEach / 2);
-            foreach (var p in jellyfishPrefabs) PoolManager.Prewarm(p, prewarmEach / 2);
-            _timer = 1f;
+            foreach (GameObject prefab in rockPrefabs) PoolManager.Prewarm(prefab, prewarmEach);
+            foreach (GameObject prefab in logPrefabs) PoolManager.Prewarm(prefab, prewarmEach / 2);
+            foreach (GameObject prefab in jellyfishPrefabs) PoolManager.Prewarm(prefab, prewarmEach / 2);
+            timer = 1f;
         }
 
-        private void Update()
+        void Update()
         {
-            GameManager gm = GameManager.Instance;
-            if (gm != null && (!gm.IsPlaying || gm.InGracePeriod)) return;
+            GameManager game = GameManager.Instance;
+            if (game != null && (!game.IsPlaying || game.InGracePeriod)) return;
 
-            _timer -= Time.deltaTime;
-            if (_timer > 0f) return;
-            DifficultyManager diff = DifficultyManager.Instance;
-            _timer = (diff != null ? diff.ObstacleInterval : 1.4f) * Random.Range(0.7f, 1.3f);
+            timer -= Time.deltaTime;
+            if (timer > 0f) return;
 
-            GameObject prefab = ChoosePrefab(diff);
+            DifficultyManager difficulty = DifficultyManager.Instance;
+            float interval = 1.4f;
+            if (difficulty != null) interval = difficulty.ObstacleInterval;
+            timer = interval * Random.Range(0.7f, 1.3f);
+
+            GameObject prefab = ChoosePrefab(difficulty);
             if (prefab == null) return;
-            float radius = prefab.GetComponent<Obstacle>() != null ? prefab.GetComponent<Obstacle>().radius : 1.2f;
 
-            // try a few positions, keep the first fair one
+            float radius = 1.2f;
+            Obstacle prefabObstacle = prefab.GetComponent<Obstacle>();
+            if (prefabObstacle != null) radius = prefabObstacle.radius;
+
+            // Try a few random positions and use the first fair one.
             for (int attempt = 0; attempt < 6; attempt++)
             {
                 float x = Random.Range(laneX.x, laneX.y);
-                Vector3 pos = new Vector3(x, 0f, spawnZ + Random.Range(0f, 6f));
-                if (IsFair(pos, radius))
+                Vector3 position = new Vector3(x, 0f, spawnZ + Random.Range(0f, 6f));
+                if (IsFair(position, radius))
                 {
-                    PoolManager.Spawn(prefab, pos, Quaternion.identity);
+                    PoolManager.Spawn(prefab, position, Quaternion.identity);
                     return;
                 }
             }
         }
 
-        private GameObject ChoosePrefab(DifficultyManager diff)
+        GameObject ChoosePrefab(DifficultyManager difficulty)
         {
-            float jelly = diff != null ? diff.JellyfishChance : 0.2f;
-            float log = diff != null ? diff.LogChance : 0.2f;
-            float r = Random.value;
-            if (r < jelly && jellyfishPrefabs.Length > 0) return jellyfishPrefabs[Random.Range(0, jellyfishPrefabs.Length)];
-            if (r < jelly + log && logPrefabs.Length > 0) return logPrefabs[Random.Range(0, logPrefabs.Length)];
-            return rockPrefabs.Length > 0 ? rockPrefabs[Random.Range(0, rockPrefabs.Length)] : null;
+            float jellyChance = 0.2f;
+            float logChance = 0.2f;
+            if (difficulty != null)
+            {
+                jellyChance = difficulty.JellyfishChance;
+                logChance = difficulty.LogChance;
+            }
+
+            float roll = Random.value;
+            if (roll < jellyChance && jellyfishPrefabs.Length > 0)
+                return jellyfishPrefabs[Random.Range(0, jellyfishPrefabs.Length)];
+            if (roll < jellyChance + logChance && logPrefabs.Length > 0)
+                return logPrefabs[Random.Range(0, logPrefabs.Length)];
+            if (rockPrefabs.Length > 0)
+                return rockPrefabs[Random.Range(0, rockPrefabs.Length)];
+            return null;
         }
 
-        // Fair = doesn't overlap another obstacle, and the obstacles in this
-        // "row" (similar Z) still leave a gap the boat can pass through.
-        private bool IsFair(Vector3 pos, float radius)
+        // A position is fair if it doesn't overlap another obstacle and the boat
+        // can still get past everything in this "row" of the lane.
+        bool IsFair(Vector3 position, float radius)
         {
-            float blockedFrom = pos.x - radius, blockedTo = pos.x + radius;
-            var intervals = new System.Collections.Generic.List<Vector2> { new Vector2(blockedFrom, blockedTo) };
-            foreach (DriftingObject d in DriftingObject.Active)
+            // Each blocked piece of the row is stored as (from x, to x).
+            List<Vector2> blocked = new List<Vector2>();
+            blocked.Add(new Vector2(position.x - radius, position.x + radius));
+
+            foreach (DriftingObject thing in DriftingObject.Active)
             {
-                if (!(d is Obstacle o)) continue;
-                Vector3 diff = o.transform.position - pos;
-                if (Mathf.Abs(diff.z) < o.radius + radius + 2f && Mathf.Abs(diff.x) < o.radius + radius + 0.5f) return false; // overlap
-                if (Mathf.Abs(diff.z) < 8f)
-                    intervals.Add(new Vector2(o.transform.position.x - o.radius, o.transform.position.x + o.radius));
+                Obstacle other = thing as Obstacle;
+                if (other == null) continue;
+
+                Vector3 offset = other.transform.position - position;
+                bool tooCloseInZ = Mathf.Abs(offset.z) < other.radius + radius + 2f;
+                bool tooCloseInX = Mathf.Abs(offset.x) < other.radius + radius + 0.5f;
+                if (tooCloseInZ && tooCloseInX) return false;   // they would overlap
+
+                // Obstacles within 8 m ahead/behind count as the same row.
+                if (Mathf.Abs(offset.z) < 8f)
+                {
+                    float otherX = other.transform.position.x;
+                    blocked.Add(new Vector2(otherX - other.radius, otherX + other.radius));
+                }
             }
-            // largest free gap across the lane
-            intervals.Sort((a, b) => a.x.CompareTo(b.x));
-            float cursor = laneX.x - 1f, bestGap = 0f;
-            foreach (Vector2 iv in intervals)
+
+            return LargestGap(blocked) >= minimumGap;
+        }
+
+        // Walks across the lane from left to right and finds the widest free space.
+        float LargestGap(List<Vector2> blocked)
+        {
+            blocked.Sort((a, b) => a.x.CompareTo(b.x));
+
+            float edge = laneX.x - 1f;   // right edge of everything blocked so far
+            float largest = 0f;
+            foreach (Vector2 piece in blocked)
             {
-                bestGap = Mathf.Max(bestGap, iv.x - cursor);
-                cursor = Mathf.Max(cursor, iv.y);
+                largest = Mathf.Max(largest, piece.x - edge);
+                edge = Mathf.Max(edge, piece.y);
             }
-            bestGap = Mathf.Max(bestGap, laneX.y + 1f - cursor);
-            return bestGap >= minimumGap;
+            largest = Mathf.Max(largest, laneX.y + 1f - edge);
+            return largest;
         }
     }
 }

@@ -1,257 +1,275 @@
-// =============================================================================
-//  OceanController - drives the StarlitTides/Ocean shader
-// -----------------------------------------------------------------------------
-//  * Owns the ocean clock and the tide (how far the sea has flowed toward -Z).
-//  * Collects every WaterDisturber + short-lived ripples/trail points and sends
-//    them to the shader so the plankton glows around them.
-//  * Gives gameplay code the exact wave height at any point (GetWaterHeight),
-//    using the SAME Gerstner maths as the shader, so the boat, orbs and
-//    obstacles bob perfectly in sync with the waves you see.
-//  * Exposes WaveScale (weather), TideSpeed (difficulty) and SeaGlowBoost
-//    (Starburst power-up) for later phases.
-// =============================================================================
+// OceanController: drives the ocean shader and answers "how high is the water here?".
+//
+// What it does every frame:
+// - Advances the ocean clock and the tide (how far the sea has flowed toward the camera).
+// - Collects the glowing spots from every WaterDisturber and every ripple and
+//   sends them to the shader as one list.
+// - Copies the wave settings from the ocean material, so GetWaterHeight() uses
+//   exactly the same Gerstner wave maths as the shader. That's why the boat,
+//   orbs and rocks bob in sync with the waves you see.
+// Other phases change: tideSpeed (difficulty), waveScale (storms) and
+// seaGlowBoost (Starburst power-up).
+
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace StarlitTides
 {
-    [ExecuteAlways]
+    [ExecuteAlways]          // also runs in the editor, so the sea animates while you work
     [DisallowMultipleComponent]
     public class OceanController : MonoBehaviour
     {
         public static OceanController Instance { get; private set; }
 
-        public const int MaxDisturbPoints = 32;   // must match the shader array size
+        // Must match the array size in StarlitOcean.shader.
+        public const int MaxDisturbPoints = 32;
 
-        [Tooltip("The ocean material (StarlitTides/Ocean). Wave settings are read from it.")]
+        [Tooltip("The ocean material. The wave settings are read from it.")]
         public Material oceanMaterial;
 
         [Header("Tide")]
-        [Tooltip("Speed (m/s) at which the sea flows toward the camera (-Z).")]
+        [Tooltip("How fast the sea flows toward the camera, in m/s.")]
         public float tideSpeed = 4f;
 
-        [Header("Weather and power-ups (driven by later phases)")]
+        [Header("Weather and power-ups")]
         [Tooltip("1 = calm night, about 1.8 = storm.")]
         [Range(0f, 3f)] public float waveScale = 1f;
         [Tooltip("Starburst: 0 = off, 1 = the whole sea glows.")]
         [Range(0f, 1f)] public float seaGlowBoost = 0f;
         [ColorUsage(false, true)] public Color seaGlowColor = new Color(1.6f, 1.3f, 0.5f);
 
-        [Header("Trail ripples")]
-        [Tooltip("How long a trail ripple keeps glowing (seconds).")]
+        [Header("Ripples")]
+        [Tooltip("How long a ripple glows, in seconds.")]
         public float defaultRippleLife = 1.6f;
 
-        // ---- shader property IDs (cached for speed) ----
-        private static readonly int OceanTimeId    = Shader.PropertyToID("_OceanTime");
-        private static readonly int TideOffsetId   = Shader.PropertyToID("_TideOffset");
-        private static readonly int WaveScaleId    = Shader.PropertyToID("_WaveScale");
-        private static readonly int SeaGlowBoostId = Shader.PropertyToID("_SeaGlowBoost");
-        private static readonly int SeaGlowColorId = Shader.PropertyToID("_SeaGlowColor");
-        private static readonly int DisturbPtsId   = Shader.PropertyToID("_DisturbPoints");
-        private static readonly int DisturbCountId = Shader.PropertyToID("_DisturbCount");
-        private static readonly int WaveAId = Shader.PropertyToID("_WaveA");
-        private static readonly int WaveBId = Shader.PropertyToID("_WaveB");
-        private static readonly int WaveCId = Shader.PropertyToID("_WaveC");
-        private static readonly int WaveDId = Shader.PropertyToID("_WaveD");
-        private static readonly int FadeStartId = Shader.PropertyToID("_WaveFadeStart");
-        private static readonly int FadeEndId   = Shader.PropertyToID("_WaveFadeEnd");
-        private static readonly int CalmZoneId  = Shader.PropertyToID("_CalmZone");
-
-        private struct Ripple
+        // A short-lived glowing ring on the water (wakes, splashes, pickups).
+        struct Ripple
         {
-            public Vector2 xz;
-            public float radius, strength, age, life;
+            public Vector2 position;   // world X and Z
+            public float radius;
+            public float strength;
+            public float age;
+            public float life;
         }
 
-        private readonly List<WaterDisturber> _disturbers = new List<WaterDisturber>();
-        private readonly List<Ripple> _ripples = new List<Ripple>();
-        private readonly Vector4[] _points = new Vector4[MaxDisturbPoints];
+        List<WaterDisturber> disturbers = new List<WaterDisturber>();
+        List<Ripple> ripples = new List<Ripple>();
+        Vector4[] glowPoints = new Vector4[MaxDisturbPoints];
 
-        private float _oceanTime;
-        private float _tideOffset;
-        private double _lastEditorTime;
+        float oceanTime;
+        float tideOffset;
+        double lastEditorTime;
 
-        // cached wave parameters (read from the material each frame - cheap)
-        private Vector4[] _waves = new Vector4[4];
-        private float _fadeStart = 180f, _fadeEnd = 650f;
-        private Vector4 _calmZone = new Vector4(-85f, 95f, 34f, 28f);
+        // Copies of the material's wave settings (each: direction x, direction z, steepness, wavelength).
+        Vector4[] waves = new Vector4[4];
+        float waveFadeStart = 180f;
+        float waveFadeEnd = 650f;
+        Vector4 calmZone = new Vector4(-85f, 95f, 34f, 28f);   // the lagoon: centre x, z and size x, z
 
-        public float OceanTime => _oceanTime;
-        public float TideOffset => _tideOffset;
+        public float OceanTime { get { return oceanTime; } }
+        public float TideOffset { get { return tideOffset; } }
 
-        private void OnEnable()
+        void OnEnable()
         {
             Instance = this;
 #if UNITY_EDITOR
-            _lastEditorTime = UnityEditor.EditorApplication.timeSinceStartup;
+            lastEditorTime = UnityEditor.EditorApplication.timeSinceStartup;
 #endif
         }
 
-        private void OnDisable()
+        void OnDisable()
         {
             if (Instance == this) Instance = null;
         }
 
-        private void Update()
+        void Update()
         {
-            float dt = Time.deltaTime;
-#if UNITY_EDITOR
-            if (!Application.isPlaying)
-            {
-                // Animate in the Scene view too, so you can see the sea while you build.
-                double now = UnityEditor.EditorApplication.timeSinceStartup;
-                dt = Mathf.Min((float)(now - _lastEditorTime), 0.1f);
-                _lastEditorTime = now;
-            }
-#endif
-            _oceanTime += dt;
-            _tideOffset += tideSpeed * dt;
-            // keep the number small so float precision never breaks the shader
-            if (_tideOffset > 100000f) _tideOffset -= 100000f;
+            float dt = GetDeltaTime();
+            oceanTime += dt;
+            tideOffset += tideSpeed * dt;
+            // Keep the number small, otherwise float precision breaks the waves after a long time.
+            if (tideOffset > 100000f) tideOffset -= 100000f;
 
             ReadWaveSettings();
             UpdateRipples(dt);
-            PushToShader();
+            SendToShader();
         }
 
-        private void ReadWaveSettings()
+        // In Play mode use Time.deltaTime. In the editor use the editor clock instead.
+        float GetDeltaTime()
+        {
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                double now = UnityEditor.EditorApplication.timeSinceStartup;
+                float dt = Mathf.Min((float)(now - lastEditorTime), 0.1f);
+                lastEditorTime = now;
+                return dt;
+            }
+#endif
+            return Time.deltaTime;
+        }
+
+        void ReadWaveSettings()
         {
             if (oceanMaterial == null) return;
-            _waves[0] = oceanMaterial.GetVector(WaveAId);
-            _waves[1] = oceanMaterial.GetVector(WaveBId);
-            _waves[2] = oceanMaterial.GetVector(WaveCId);
-            _waves[3] = oceanMaterial.GetVector(WaveDId);
-            _fadeStart = oceanMaterial.GetFloat(FadeStartId);
-            _fadeEnd = oceanMaterial.GetFloat(FadeEndId);
-            _calmZone = oceanMaterial.GetVector(CalmZoneId);
+            waves[0] = oceanMaterial.GetVector("_WaveA");
+            waves[1] = oceanMaterial.GetVector("_WaveB");
+            waves[2] = oceanMaterial.GetVector("_WaveC");
+            waves[3] = oceanMaterial.GetVector("_WaveD");
+            waveFadeStart = oceanMaterial.GetFloat("_WaveFadeStart");
+            waveFadeEnd = oceanMaterial.GetFloat("_WaveFadeEnd");
+            calmZone = oceanMaterial.GetVector("_CalmZone");
         }
 
-        private void UpdateRipples(float dt)
+        void UpdateRipples(float dt)
         {
-            for (int i = _ripples.Count - 1; i >= 0; i--)
+            // Go backwards so we can remove items while looping.
+            for (int i = ripples.Count - 1; i >= 0; i--)
             {
-                Ripple r = _ripples[i];
+                Ripple r = ripples[i];
                 r.age += dt;
-                r.xz.y -= tideSpeed * dt;   // ripples drift away with the tide -> natural wake trail
-                if (r.age >= r.life) { _ripples.RemoveAt(i); continue; }
-                _ripples[i] = r;
+                r.position.y -= tideSpeed * dt;   // ripples float away on the tide
+                if (r.age >= r.life) ripples.RemoveAt(i);
+                else ripples[i] = r;
             }
         }
 
-        private void PushToShader()
+        void SendToShader()
         {
             int count = 0;
 
-            // 1) live disturbers (boat, obstacles, orbs)
-            for (int i = 0; i < _disturbers.Count && count < MaxDisturbPoints; i++)
+            // First the objects touching the water (boat, rocks, orbs...).
+            foreach (WaterDisturber d in disturbers)
             {
-                WaterDisturber d = _disturbers[i];
+                if (count >= MaxDisturbPoints) break;
                 if (d == null || !d.isActiveAndEnabled) continue;
+
                 Vector3 p = d.transform.position;
-                if (Mathf.Abs(p.y - GetWaterHeight(p)) > d.maxHeightAboveWater) continue; // not touching water
-                _points[count++] = new Vector4(p.x, p.z, d.radius, d.CurrentStrength);
+                bool touchingWater = Mathf.Abs(p.y - GetWaterHeight(p)) <= d.maxHeightAboveWater;
+                if (!touchingWater) continue;
+
+                glowPoints[count] = new Vector4(p.x, p.z, d.radius, d.CurrentStrength);
+                count++;
             }
 
-            // 2) ripples, newest first (most visible)
-            for (int i = _ripples.Count - 1; i >= 0 && count < MaxDisturbPoints; i--)
+            // Then the ripples, newest first (they're the brightest).
+            for (int i = ripples.Count - 1; i >= 0 && count < MaxDisturbPoints; i--)
             {
-                Ripple r = _ripples[i];
-                float t = r.age / r.life;
+                Ripple r = ripples[i];
+                float t = r.age / r.life;           // 0 = new, 1 = gone
                 float fade = (1f - t) * (1f - t);
-                float radius = r.radius * (0.6f + t * 1.2f);   // rings expand as they fade
-                _points[count++] = new Vector4(r.xz.x, r.xz.y, radius, r.strength * fade);
+                float radius = r.radius * (0.6f + t * 1.2f);   // the ring grows as it fades
+                glowPoints[count] = new Vector4(r.position.x, r.position.y, radius, r.strength * fade);
+                count++;
             }
 
-            for (int i = count; i < MaxDisturbPoints; i++) _points[i] = Vector4.zero;
+            // Clear the unused slots.
+            for (int i = count; i < MaxDisturbPoints; i++) glowPoints[i] = Vector4.zero;
 
-            Shader.SetGlobalFloat(OceanTimeId, _oceanTime);
-            Shader.SetGlobalFloat(TideOffsetId, _tideOffset);
-            Shader.SetGlobalFloat(WaveScaleId, waveScale);
-            Shader.SetGlobalFloat(SeaGlowBoostId, seaGlowBoost);
-            Shader.SetGlobalColor(SeaGlowColorId, seaGlowColor);
-            Shader.SetGlobalVectorArray(DisturbPtsId, _points);
-            Shader.SetGlobalInt(DisturbCountId, count);
+            Shader.SetGlobalFloat("_OceanTime", oceanTime);
+            Shader.SetGlobalFloat("_TideOffset", tideOffset);
+            Shader.SetGlobalFloat("_WaveScale", waveScale);
+            Shader.SetGlobalFloat("_SeaGlowBoost", seaGlowBoost);
+            Shader.SetGlobalColor("_SeaGlowColor", seaGlowColor);
+            Shader.SetGlobalVectorArray("_DisturbPoints", glowPoints);
+            Shader.SetGlobalInt("_DisturbCount", count);
         }
 
-        // ---------------------------------------------------------------------
-        // Public API
-        // ---------------------------------------------------------------------
-        public void Register(WaterDisturber d) { if (!_disturbers.Contains(d)) _disturbers.Add(d); }
-        public void Unregister(WaterDisturber d) { _disturbers.Remove(d); }
-
-        /// <summary>Adds a short-lived glowing ripple (splashes, wake, pickups).</summary>
-        public void AddRipple(Vector3 worldPos, float radius, float strength, float life = -1f)
+        public void Register(WaterDisturber d)
         {
-            if (_ripples.Count > 96) _ripples.RemoveAt(0);
-            _ripples.Add(new Ripple
-            {
-                xz = new Vector2(worldPos.x, worldPos.z),
-                radius = radius,
-                strength = strength,
-                age = 0f,
-                life = life > 0f ? life : defaultRippleLife
-            });
+            if (!disturbers.Contains(d)) disturbers.Add(d);
         }
 
-        /// <summary>Exact height of the sea surface at a world position (matches the shader).</summary>
-        public float GetWaterHeight(Vector3 worldPos)
+        public void Unregister(WaterDisturber d)
         {
-            // Gerstner waves also move points sideways, so we take one step back
-            // to find which undisplaced point ended up here, then sample again.
-            Vector3 first = Displacement(worldPos.x, worldPos.z, out _);
-            Vector3 second = Displacement(worldPos.x - first.x, worldPos.z - first.z, out _);
-            return transform.position.y + second.y;
+            disturbers.Remove(d);
         }
 
-        /// <summary>Surface normal at a world position (for tilting floating objects).</summary>
-        public Vector3 GetWaterNormal(Vector3 worldPos)
+        // Adds a short glowing ripple (splashes, the boat's wake, orb pickups).
+        public void AddRipple(Vector3 worldPosition, float radius, float strength, float life = -1f)
         {
-            Displacement(worldPos.x, worldPos.z, out Vector3 normal);
+            if (ripples.Count > 96) ripples.RemoveAt(0);   // forget the oldest
+
+            Ripple r = new Ripple();
+            r.position = new Vector2(worldPosition.x, worldPosition.z);
+            r.radius = radius;
+            r.strength = strength;
+            r.age = 0f;
+            r.life = life > 0f ? life : defaultRippleLife;
+            ripples.Add(r);
+        }
+
+        // Height of the sea surface at this point (same result as the shader).
+        public float GetWaterHeight(Vector3 worldPosition)
+        {
+            // Gerstner waves also push the water sideways, so the water that ends
+            // up here started a little to the side. One correction step is enough.
+            Vector3 normal;
+            Vector3 first = WaveOffset(worldPosition.x, worldPosition.z, out normal);
+            Vector3 corrected = WaveOffset(worldPosition.x - first.x, worldPosition.z - first.z, out normal);
+            return transform.position.y + corrected.y;
+        }
+
+        // Which way the water surface faces at this point (for tilting floating things).
+        public Vector3 GetWaterNormal(Vector3 worldPosition)
+        {
+            Vector3 normal;
+            WaveOffset(worldPosition.x, worldPosition.z, out normal);
             return normal;
         }
 
-        // CPU copy of the vertex shader's wave maths.
-        private Vector3 Displacement(float x, float z, out Vector3 normal)
+        // The same 4 Gerstner waves as the vertex shader (see StarlitOcean.shader).
+        Vector3 WaveOffset(float x, float z, out Vector3 normal)
         {
-            float amp = WaveAmplitude(x, z);
-            float px = x;
-            float pz = z + _tideOffset;
-            Vector3 tangent = new Vector3(1, 0, 0);
-            Vector3 binormal = new Vector3(0, 0, 1);
+            float amplitude = WaveAmplitude(x, z);
+            float sampleZ = z + tideOffset;   // the pattern flows with the tide
+
+            Vector3 tangent = new Vector3(1f, 0f, 0f);
+            Vector3 binormal = new Vector3(0f, 0f, 1f);
             Vector3 offset = Vector3.zero;
 
             for (int i = 0; i < 4; i++)
             {
-                Vector4 w = _waves[i];
-                if (w.w <= 0.001f) continue;
-                float steep = w.z * amp;
-                float k = 2f * Mathf.PI / w.w;
-                float c = Mathf.Sqrt(9.8f / k);
-                Vector2 d = new Vector2(w.x, w.y).normalized;
-                float f = k * (d.x * px + d.y * pz - c * _oceanTime);
-                float a = steep / k;
-                float s = Mathf.Sin(f), co = Mathf.Cos(f);
-                tangent  += new Vector3(-d.x * d.x * steep * s, d.x * steep * co, -d.x * d.y * steep * s);
-                binormal += new Vector3(-d.x * d.y * steep * s, d.y * steep * co, -d.y * d.y * steep * s);
-                offset   += new Vector3(d.x * a * co, a * s, d.y * a * co);
+                Vector4 wave = waves[i];
+                if (wave.w <= 0.001f) continue;   // no wavelength = no wave
+
+                float steepness = wave.z * amplitude;
+                float k = 2f * Mathf.PI / wave.w;          // wave number
+                float speed = Mathf.Sqrt(9.8f / k);       // real deep-water wave speed
+                Vector2 dir = new Vector2(wave.x, wave.y).normalized;
+                float f = k * (dir.x * x + dir.y * sampleZ - speed * oceanTime);
+                float a = steepness / k;                   // wave height
+                float sin = Mathf.Sin(f);
+                float cos = Mathf.Cos(f);
+
+                offset += new Vector3(dir.x * a * cos, a * sin, dir.y * a * cos);
+                tangent += new Vector3(-dir.x * dir.x * steepness * sin, dir.x * steepness * cos, -dir.x * dir.y * steepness * sin);
+                binormal += new Vector3(-dir.x * dir.y * steepness * sin, dir.y * steepness * cos, -dir.y * dir.y * steepness * sin);
             }
+
             normal = Vector3.Cross(binormal, tangent).normalized;
             return offset;
         }
 
-        private float WaveAmplitude(float x, float z)
+        // Waves fade out far away and inside the calm lagoon (same as the shader).
+        float WaveAmplitude(float x, float z)
         {
-            float dist = Mathf.Sqrt(x * x + z * z);
-            float far = 1f - SmoothStep(_fadeStart, _fadeEnd, dist);
-            float ex = (x - _calmZone.x) / Mathf.Max(_calmZone.z, 0.001f);
-            float ez = (z - _calmZone.y) / Mathf.Max(_calmZone.w, 0.001f);
-            float calm = SmoothStep(0.7f, 1.3f, Mathf.Sqrt(ex * ex + ez * ez));
-            return far * calm * waveScale;
+            float distance = Mathf.Sqrt(x * x + z * z);
+            float farFade = 1f - SmoothStep(waveFadeStart, waveFadeEnd, distance);
+
+            float lagoonX = (x - calmZone.x) / Mathf.Max(calmZone.z, 0.001f);
+            float lagoonZ = (z - calmZone.y) / Mathf.Max(calmZone.w, 0.001f);
+            float lagoonDistance = Mathf.Sqrt(lagoonX * lagoonX + lagoonZ * lagoonZ);   // < 1 means inside
+            float lagoonFade = SmoothStep(0.7f, 1.3f, lagoonDistance);
+
+            return farFade * lagoonFade * waveScale;
         }
 
-        private static float SmoothStep(float a, float b, float x)
+        // Same as HLSL's smoothstep().
+        static float SmoothStep(float from, float to, float x)
         {
-            float t = Mathf.Clamp01((x - a) / (b - a));
+            float t = Mathf.Clamp01((x - from) / (to - from));
             return t * t * (3f - 2f * t);
         }
     }

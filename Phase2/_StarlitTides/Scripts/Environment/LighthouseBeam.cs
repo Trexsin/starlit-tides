@@ -1,10 +1,8 @@
-// =============================================================================
-//  LighthouseBeam - slowly sweeps the lighthouse light across the sea
-// -----------------------------------------------------------------------------
-//  Rotates the lamp head (which holds the spot light and the beam cone mesh).
-//  Exposes the beam direction so Bonus Feature 8 can reveal hidden orbs that
-//  the beam passes over.
-// =============================================================================
+// LighthouseBeam: slowly turns the lighthouse lamp so its beams sweep the sea.
+//
+// It also answers "is this point inside the beam?" (IsLit), which Phase 5
+// uses to reveal hidden orbs when the light passes over them.
+
 using UnityEngine;
 
 namespace StarlitTides
@@ -15,55 +13,61 @@ namespace StarlitTides
 
         [Tooltip("Degrees per second.")]
         public float rotationSpeed = 22f;
-        [Tooltip("The rotating lamp head. Defaults to this transform.")]
+        [Tooltip("The part that turns. Uses this object if empty.")]
         public Transform rotatingHead;
-        [Tooltip("Spot light inside the lamp (optional, gets a soft pulse).")]
+        [Tooltip("Optional spot light that gently pulses.")]
         public Light spotLight;
         public float pulseAmount = 0.12f;
 
-        private float _baseIntensity;
+        float baseIntensity;
 
-        /// <summary>World-space direction the main beam is pointing (flattened to XZ).</summary>
+        // The direction the front beam points, flattened onto the sea.
         public Vector3 BeamDirection
         {
             get
             {
-                Vector3 f = (rotatingHead != null ? rotatingHead : transform).forward;
-                f.y = 0f;
-                return f.sqrMagnitude > 0.0001f ? f.normalized : Vector3.forward;
+                Vector3 forward = Head.forward;
+                forward.y = 0f;
+                if (forward.sqrMagnitude < 0.0001f) return Vector3.forward;
+                return forward.normalized;
             }
         }
 
-        public Vector3 BeamOrigin => (rotatingHead != null ? rotatingHead : transform).position;
+        public Vector3 BeamOrigin { get { return Head.position; } }
 
-        private void OnEnable()
+        Transform Head { get { return rotatingHead != null ? rotatingHead : transform; } }
+
+        void OnEnable()
         {
             Instance = this;
             if (rotatingHead == null) rotatingHead = transform;
-            if (spotLight != null) _baseIntensity = spotLight.intensity;
+            if (spotLight != null) baseIntensity = spotLight.intensity;
         }
 
-        private void OnDisable()
+        void OnDisable()
         {
             if (Instance == this) Instance = null;
         }
 
-        private void Update()
+        void Update()
         {
             rotatingHead.Rotate(Vector3.up, rotationSpeed * Time.deltaTime, Space.World);
+
             if (spotLight != null)
-                spotLight.intensity = _baseIntensity * (1f + Mathf.Sin(Time.time * 1.7f) * pulseAmount);
+                spotLight.intensity = baseIntensity * (1f + Mathf.Sin(Time.time * 1.7f) * pulseAmount);
         }
 
-        /// <summary>True if a world point is inside the beam (used to reveal hidden orbs).</summary>
-        public bool IsLit(Vector3 worldPoint, float halfAngleDeg = 8f, float maxDistance = 220f)
+        // True if the point is inside either beam (front or back) and not too far away.
+        public bool IsLit(Vector3 worldPoint, float halfAngleDegrees = 8f, float maxDistance = 220f)
         {
-            Vector3 to = worldPoint - BeamOrigin;
-            to.y = 0f;
-            if (to.magnitude > maxDistance) return false;
-            // both beams (front and back of the lamp)
-            float angle = Vector3.Angle(BeamDirection, to);
-            return angle < halfAngleDeg || angle > 180f - halfAngleDeg;
+            Vector3 toPoint = worldPoint - BeamOrigin;
+            toPoint.y = 0f;
+            if (toPoint.magnitude > maxDistance) return false;
+
+            float angle = Vector3.Angle(BeamDirection, toPoint);
+            bool inFrontBeam = angle < halfAngleDegrees;
+            bool inBackBeam = angle > 180f - halfAngleDegrees;
+            return inFrontBeam || inBackBeam;
         }
     }
 }

@@ -1,87 +1,102 @@
-// =============================================================================
-//  WaterDisturber - makes the plankton glow around this object
-// -----------------------------------------------------------------------------
-//  Add to anything that touches the sea: the boat, rocks, logs, jellyfish,
-//  orbs. While it is near the surface the ocean shader draws a glowing core
-//  and ring around it. If it moves relative to the water (like the boat) it
-//  also drops trail ripples that drift away on the tide: a glowing wake.
-// =============================================================================
+// WaterDisturber: makes the plankton glow around this object.
+//
+// Put it on anything that touches the sea: the boat, rocks, logs, jellyfish
+// and orbs. While it's near the surface, the ocean shader draws a glowing
+// ring around it.
+// If "leaveTrail" is on (the boat), it also drops little glowing ripples as it
+// moves through the water. They drift away with the tide, which makes a wake.
+
 using UnityEngine;
 
 namespace StarlitTides
 {
     public class WaterDisturber : MonoBehaviour
     {
-        [Tooltip("Radius of the glow around the object (metres).")]
+        [Tooltip("Size of the glow around the object, in metres.")]
         public float radius = 1.5f;
 
-        [Tooltip("Glow brightness.")]
+        [Tooltip("How bright the glow is.")]
         [Range(0f, 3f)] public float strength = 1f;
 
-        [Tooltip("Gentle pulsing of the glow (0 = steady). Nice on jellyfish.")]
+        [Tooltip("0 = steady glow, 1 = strong pulsing (nice on jellyfish).")]
         [Range(0f, 1f)] public float pulse = 0f;
         public float pulseSpeed = 2f;
 
-        [Tooltip("Ignored when further than this above or below the water.")]
+        [Tooltip("No glow when the object is further than this above or below the water.")]
         public float maxHeightAboveWater = 1.5f;
 
         [Header("Wake trail")]
         public bool leaveTrail = false;
-        [Tooltip("Distance travelled through the water between trail ripples.")]
+        [Tooltip("Distance moved through the water between ripples.")]
         public float trailSpacing = 0.8f;
         public float trailRadius = 1.2f;
         [Range(0f, 3f)] public float trailStrength = 0.8f;
         public float trailLife = 1.8f;
-        [Tooltip("Never drop ripples faster than this (seconds) - keeps fast dashes from flooding the sea with glow.")]
+        [Tooltip("Minimum seconds between ripples, so fast dashes don't flood the sea with glow.")]
         public float minTrailInterval = 0.07f;
 
-        /// <summary>Extra multiplier other scripts can use (e.g. combo makes the wake brighter).</summary>
+        // Other scripts can turn the glow up or down (e.g. the jellyfish pulse).
         [HideInInspector] public float strengthMultiplier = 1f;
 
-        private Vector3 _lastPos;
-        private float _distanceAccumulator;
-        private float _lastRippleTime;
+        Vector3 lastPosition;
+        float distanceSinceRipple;
+        float lastRippleTime;
 
-        public float CurrentStrength =>
-            strength * strengthMultiplier * (1f + (Mathf.Sin(Time.time * pulseSpeed) * 0.5f - 0.5f) * pulse);
-
-        private void OnEnable()
+        // The glow strength right now, including the pulse.
+        public float CurrentStrength
         {
-            _lastPos = transform.position;
-            _distanceAccumulator = 0f;
+            get
+            {
+                float wave = Mathf.Sin(Time.time * pulseSpeed) * 0.5f - 0.5f;   // -1..0
+                return strength * strengthMultiplier * (1f + wave * pulse);
+            }
+        }
+
+        void OnEnable()
+        {
+            lastPosition = transform.position;
+            distanceSinceRipple = 0f;
             if (OceanController.Instance != null) OceanController.Instance.Register(this);
         }
 
-        private void Start()
+        void Start()
         {
-            // OceanController may enable after us on scene load; register again (no duplicates).
+            // The ocean might not have existed yet in OnEnable when the scene loads.
+            // Registering twice is safe.
             if (OceanController.Instance != null) OceanController.Instance.Register(this);
         }
 
-        private void OnDisable()
+        void OnDisable()
         {
             if (OceanController.Instance != null) OceanController.Instance.Unregister(this);
         }
 
-        private void Update()
+        void Update()
         {
             OceanController ocean = OceanController.Instance;
-            if (!leaveTrail || ocean == null) { _lastPos = transform.position; return; }
-
-            // Movement relative to the WATER = our movement + the tide flowing past us.
-            Vector3 pos = transform.position;
-            Vector3 delta = pos - _lastPos;
-            delta.z += ocean.tideSpeed * Time.deltaTime;
-            delta.y = 0f;
-            _distanceAccumulator += delta.magnitude;
-            _lastPos = pos;
-
-            if (_distanceAccumulator >= trailSpacing && Time.time - _lastRippleTime >= minTrailInterval)
+            if (!leaveTrail || ocean == null)
             {
-                _lastRippleTime = Time.time;
-                _distanceAccumulator = 0f;
-                if (Mathf.Abs(pos.y - ocean.GetWaterHeight(pos)) < maxHeightAboveWater)
-                    ocean.AddRipple(pos, trailRadius, trailStrength * strengthMultiplier, trailLife);
+                lastPosition = transform.position;
+                return;
+            }
+
+            // How far we moved through the WATER: our own movement plus the tide flowing past.
+            Vector3 position = transform.position;
+            Vector3 moved = position - lastPosition;
+            moved.z += ocean.tideSpeed * Time.deltaTime;
+            moved.y = 0f;
+            distanceSinceRipple += moved.magnitude;
+            lastPosition = position;
+
+            bool farEnough = distanceSinceRipple >= trailSpacing;
+            bool waitedEnough = Time.time - lastRippleTime >= minTrailInterval;
+            if (farEnough && waitedEnough)
+            {
+                lastRippleTime = Time.time;
+                distanceSinceRipple = 0f;
+
+                bool touchingWater = Mathf.Abs(position.y - ocean.GetWaterHeight(position)) < maxHeightAboveWater;
+                if (touchingWater) ocean.AddRipple(position, trailRadius, trailStrength * strengthMultiplier, trailLife);
             }
         }
     }

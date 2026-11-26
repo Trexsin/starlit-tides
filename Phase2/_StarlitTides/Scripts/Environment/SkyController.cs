@@ -1,16 +1,16 @@
-// =============================================================================
-//  SkyController - one place that controls the whole night atmosphere
-// -----------------------------------------------------------------------------
-//  Feeds the Skybox/StarlitNight shader and keeps the moonlight, ambient
-//  light and fog consistent with it.  Later phases only change four numbers:
-//      sunset    0..1   (intro cinematic: sunset -> night)
-//      storm     0..1   (weather: storm clouds, darker, rougher)
-//      aurora    0..1   (weather: aurora night)
-//      lightning 0..1   (set by TriggerLightning, decays automatically)
-//  Everything else (fog colour, ambient colours, light intensity) is blended
-//  from three presets: Night, Storm and Sunset.
-// =============================================================================
+// SkyController: controls the whole night atmosphere from one place.
+//
+// It feeds the night sky shader and keeps the moonlight, ambient light and fog
+// matching it. Other features only change four sliders:
+//   sunset    0..1  intro cinematic: sunset turning into night
+//   storm     0..1  storm clouds, darker and foggier
+//   aurora    0..1  aurora night
+//   lightning 0..1  set by TriggerLightning(), fades by itself
+// Fog, ambient colours and the moonlight are blended from three presets:
+// Night, Storm and Sunset.
+
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace StarlitTides
 {
@@ -33,17 +33,17 @@ namespace StarlitTides
         }
 
         [Header("References")]
-        [Tooltip("Directional light that acts as the moon (and the sun during the intro).")]
+        [Tooltip("The directional light used as the moon (and as the sun in the intro).")]
         public Light moonLight;
-        [Tooltip("Optional: direction of the setting sun used during the intro sunset.")]
+        [Tooltip("Where the sun is during the intro sunset.")]
         public Vector3 sunDirection = new Vector3(0.55f, 0.04f, 0.83f);
 
-        [Header("State (animated by Weather / Intro)")]
+        [Header("Sliders (animated by Weather and the Intro)")]
         [Range(0f, 1f)] public float sunset = 0f;
         [Range(0f, 1f)] public float storm = 0f;
         [Range(0f, 1f)] public float aurora = 0f;
         [Range(0f, 1f)] public float lightning = 0f;
-        [Tooltip("How fast a lightning flash fades (per second).")]
+        [Tooltip("How fast a lightning flash fades, per second.")]
         public float lightningDecay = 4f;
 
         [Header("Presets")]
@@ -78,104 +78,118 @@ namespace StarlitTides
             lightIntensity = 1.4f
         };
 
-        private static readonly int MoonDirId   = Shader.PropertyToID("_MoonDirection");
-        private static readonly int SunDirId    = Shader.PropertyToID("_SunDirection");
-        private static readonly int SunsetId    = Shader.PropertyToID("_SunsetBlend");
-        private static readonly int StormId     = Shader.PropertyToID("_StormAmount");
-        private static readonly int AuroraId    = Shader.PropertyToID("_AuroraAmount");
-        private static readonly int LightningId = Shader.PropertyToID("_LightningFlash");
-        private static readonly int SkyTimeId   = Shader.PropertyToID("_SkyTime");
+        float skyTime;
+        Color lastAmbient = Color.clear;
+        Quaternion nightRotation;   // the moonlight's direction at night
+        bool hasNightRotation;
 
-        private float _skyTime;
-        private Color _lastAmbient = Color.clear;
-        private Quaternion _nightRotation;
-        private bool _hasNightRotation;
-
-        private void OnEnable()
+        void OnEnable()
         {
             Instance = this;
-            if (moonLight != null) { _nightRotation = moonLight.transform.rotation; _hasNightRotation = true; }
+            RememberNightRotation();
         }
 
-        private void OnDisable()
+        void OnDisable()
         {
             if (Instance == this) Instance = null;
         }
 
-        /// <summary>Flash of lightning (0..1 strength). The sky and the moonlight flicker.</summary>
+        void RememberNightRotation()
+        {
+            if (moonLight == null || hasNightRotation) return;
+            nightRotation = moonLight.transform.rotation;
+            hasNightRotation = true;
+        }
+
+        // A lightning flash (0..1). The sky, ambient light and moonlight all flicker.
         public void TriggerLightning(float strength = 1f)
         {
             lightning = Mathf.Max(lightning, Mathf.Clamp01(strength));
         }
 
-        private void Update()
+        void Update()
         {
             float dt = Application.isPlaying ? Time.deltaTime : 0.016f;
-            _skyTime += Application.isPlaying ? Time.unscaledDeltaTime : 0.016f;
+            // Unscaled, so the stars keep twinkling during pause and slow motion.
+            skyTime += Application.isPlaying ? Time.unscaledDeltaTime : 0.016f;
             if (lightning > 0f) lightning = Mathf.Max(0f, lightning - lightningDecay * dt);
 
-            // ---- blend the presets: night -> storm, then -> sunset on top ----
-            AtmospherePreset a = Lerp(night, stormPreset, storm);
-            a = Lerp(a, sunsetPreset, sunset);
+            // Blend night -> storm, then sunset on top.
+            AtmospherePreset look = Blend(night, stormPreset, storm);
+            look = Blend(look, sunsetPreset, sunset);
 
-            RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.Exponential;
-            RenderSettings.fogColor = a.fogColor;
-            RenderSettings.fogDensity = a.fogDensity;
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = a.ambientSky + Color.white * (lightning * 0.25f);
-            RenderSettings.ambientEquatorColor = a.ambientEquator;
-            RenderSettings.ambientGroundColor = a.ambientGround;
-            // The ambient light probe must be recomputed when ambient colours change
-            // (cheap for Trilight mode), otherwise objects keep the old ambient light.
-            Color ambientKey = RenderSettings.ambientSkyColor + RenderSettings.ambientEquatorColor * 0.37f + RenderSettings.ambientGroundColor * 0.11f;
-            if ((ambientKey - _lastAmbient).maxColorComponent > 0.002f || _lastAmbient == Color.clear)
-            {
-                _lastAmbient = ambientKey;
-                DynamicGI.UpdateEnvironment();
-            }
-
-            Vector3 moonDir = new Vector3(0.32f, 0.21f, 0.92f).normalized;
-            if (moonLight != null)
-            {
-                moonLight.color = a.lightColor;
-                moonLight.intensity = a.lightIntensity + lightning * 2.5f;
-
-                // During the sunset the light comes from the sun; at night from the moon.
-                if (!_hasNightRotation) { _nightRotation = moonLight.transform.rotation; _hasNightRotation = true; }
-                if (Application.isPlaying && sunset > 0.001f)
-                {
-                    Quaternion sunRot = Quaternion.LookRotation(-sunDirection.normalized, Vector3.up);
-                    moonLight.transform.rotation = Quaternion.Slerp(_nightRotation, sunRot, sunset);
-                }
-                else if (Application.isPlaying)
-                {
-                    moonLight.transform.rotation = _nightRotation;
-                }
-                moonDir = -((Application.isPlaying ? _nightRotation : moonLight.transform.rotation) * Vector3.forward);
-            }
-
-            Shader.SetGlobalVector(MoonDirId, moonDir);
-            Shader.SetGlobalVector(SunDirId, sunDirection.normalized);
-            Shader.SetGlobalFloat(SunsetId, sunset);
-            Shader.SetGlobalFloat(StormId, storm);
-            Shader.SetGlobalFloat(AuroraId, aurora);
-            Shader.SetGlobalFloat(LightningId, lightning);
-            Shader.SetGlobalFloat(SkyTimeId, _skyTime);
+            ApplyFogAndAmbient(look);
+            Vector3 moonDirection = ApplyMoonlight(look);
+            SendToSkyShader(moonDirection);
         }
 
-        private static AtmospherePreset Lerp(AtmospherePreset x, AtmospherePreset y, float t)
+        void ApplyFogAndAmbient(AtmospherePreset look)
         {
-            return new AtmospherePreset
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Exponential;
+            RenderSettings.fogColor = look.fogColor;
+            RenderSettings.fogDensity = look.fogDensity;
+
+            RenderSettings.ambientMode = AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = look.ambientSky + Color.white * (lightning * 0.25f);
+            RenderSettings.ambientEquatorColor = look.ambientEquator;
+            RenderSettings.ambientGroundColor = look.ambientGround;
+
+            // Unity only picks up new ambient colours after UpdateEnvironment().
+            // It's cheap in Trilight mode, but we still only call it when something changed.
+            Color ambientNow = RenderSettings.ambientSkyColor + RenderSettings.ambientEquatorColor + RenderSettings.ambientGroundColor;
+            bool changed = (ambientNow - lastAmbient).maxColorComponent > 0.002f;
+            if (changed || lastAmbient == Color.clear)
             {
-                fogColor = Color.Lerp(x.fogColor, y.fogColor, t),
-                fogDensity = Mathf.Lerp(x.fogDensity, y.fogDensity, t),
-                ambientSky = Color.Lerp(x.ambientSky, y.ambientSky, t),
-                ambientEquator = Color.Lerp(x.ambientEquator, y.ambientEquator, t),
-                ambientGround = Color.Lerp(x.ambientGround, y.ambientGround, t),
-                lightColor = Color.Lerp(x.lightColor, y.lightColor, t),
-                lightIntensity = Mathf.Lerp(x.lightIntensity, y.lightIntensity, t)
-            };
+                lastAmbient = ambientNow;
+                DynamicGI.UpdateEnvironment();
+            }
+        }
+
+        // Sets the moonlight colour, brightness and direction.
+        // Returns the direction TO the moon, which the sky shader needs.
+        Vector3 ApplyMoonlight(AtmospherePreset look)
+        {
+            if (moonLight == null) return new Vector3(0.32f, 0.21f, 0.92f).normalized;
+
+            RememberNightRotation();
+            moonLight.color = look.lightColor;
+            moonLight.intensity = look.lightIntensity + lightning * 2.5f;
+
+            if (Application.isPlaying)
+            {
+                // During the sunset the light swings toward the sun.
+                Quaternion sunRotation = Quaternion.LookRotation(-sunDirection.normalized, Vector3.up);
+                moonLight.transform.rotation = Quaternion.Slerp(nightRotation, sunRotation, sunset);
+                return -(nightRotation * Vector3.forward);
+            }
+
+            // In the editor, follow the light as you rotate it.
+            return -(moonLight.transform.rotation * Vector3.forward);
+        }
+
+        void SendToSkyShader(Vector3 moonDirection)
+        {
+            Shader.SetGlobalVector("_MoonDirection", moonDirection);
+            Shader.SetGlobalVector("_SunDirection", sunDirection.normalized);
+            Shader.SetGlobalFloat("_SunsetBlend", sunset);
+            Shader.SetGlobalFloat("_StormAmount", storm);
+            Shader.SetGlobalFloat("_AuroraAmount", aurora);
+            Shader.SetGlobalFloat("_LightningFlash", lightning);
+            Shader.SetGlobalFloat("_SkyTime", skyTime);
+        }
+
+        static AtmospherePreset Blend(AtmospherePreset a, AtmospherePreset b, float t)
+        {
+            AtmospherePreset result = new AtmospherePreset();
+            result.fogColor = Color.Lerp(a.fogColor, b.fogColor, t);
+            result.fogDensity = Mathf.Lerp(a.fogDensity, b.fogDensity, t);
+            result.ambientSky = Color.Lerp(a.ambientSky, b.ambientSky, t);
+            result.ambientEquator = Color.Lerp(a.ambientEquator, b.ambientEquator, t);
+            result.ambientGround = Color.Lerp(a.ambientGround, b.ambientGround, t);
+            result.lightColor = Color.Lerp(a.lightColor, b.lightColor, t);
+            result.lightIntensity = Mathf.Lerp(a.lightIntensity, b.lightIntensity, t);
+            return result;
         }
     }
 }

@@ -1,10 +1,10 @@
-// =============================================================================
-//  VfxLibrary - one place that knows every pooled particle effect
-// -----------------------------------------------------------------------------
-//  Gameplay code calls  VfxLibrary.Instance.Play(VfxLibrary.Instance.splash, pos)
-//  and never needs its own prefab references. Effects are pooled and return
-//  themselves when finished (PooledParticle).
-// =============================================================================
+// VfxLibrary: one place that holds all the particle effect prefabs.
+//
+// Gameplay code just calls:
+//   VfxLibrary.Instance.Play(VfxLibrary.Instance.splash, position);
+// The effects come from the pool and put themselves back when finished
+// (see PooledParticle).
+
 using UnityEngine;
 
 namespace StarlitTides
@@ -13,26 +13,31 @@ namespace StarlitTides
     {
         public static VfxLibrary Instance { get; private set; }
 
-        [Header("Phase 3")]
         public GameObject orbBurst;
         public GameObject splash;
         public GameObject dashBurst;
 
-        private void Awake() { Instance = this; }
-        private void OnDestroy() { if (Instance == this) Instance = null; }
+        void Awake()
+        {
+            Instance = this;
+        }
 
-        private void Start()
+        void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        void Start()
         {
             PoolManager.Prewarm(orbBurst, 8);
             PoolManager.Prewarm(splash, 4);
             PoolManager.Prewarm(dashBurst, 3);
         }
 
-        public GameObject Play(GameObject prefab, Vector3 position, Quaternion? rotation = null)
+        public GameObject Play(GameObject effectPrefab, Vector3 position)
         {
-            if (prefab == null) return null;
-            return PoolManager.Spawn(prefab, position, rotation ?? Quaternion.identity);
+            if (effectPrefab == null) return null;
+            return PoolManager.Spawn(effectPrefab, position, Quaternion.identity);
         }
     }
-
 }

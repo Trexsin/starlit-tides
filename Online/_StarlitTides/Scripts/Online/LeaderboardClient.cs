@@ -1,18 +1,18 @@
-// =============================================================================
-//  LeaderboardClient - talks to the Starlit Tides leaderboard on Vercel
-// -----------------------------------------------------------------------------
-//  The game never touches the database directly (that would put the database
-//  password inside the .exe). Instead it calls a tiny web API:
+// LeaderboardClient: sends scores to the online leaderboard and gets the top scores.
 //
-//      Unity  --HTTPS-->  Vercel function (/api/scores)  -->  Neon Postgres
+// The game never talks to the database directly. The database password would
+// end up inside the .exe where anyone could find it. Instead it calls a small
+// web API on Vercel, and only that API knows the password:
 //
-//  Usage (e.g. from the Game Over screen, Bonus 11):
-//      LeaderboardClient.Instance.SubmitScore("Mira", (ok, rank, error) => { ... });
-//      LeaderboardClient.Instance.FetchTop(10, (ok, entries, error) => { ... });
+//   Unity  --HTTPS-->  Vercel (/api/scores)  -->  Neon Postgres database
 //
-//  Everything is asynchronous (coroutines) and fails gracefully: with no
-//  internet the game keeps working and only the online board is skipped.
-// =============================================================================
+// Usage (for example on the Game Over screen):
+//   LeaderboardClient.Instance.SubmitScore("Mira", OnSubmitted);
+//   LeaderboardClient.Instance.FetchTop(10, OnTopScores);
+//
+// Requests run in the background (coroutines). If there's no internet the
+// game keeps working and only the online board is skipped.
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -26,11 +26,12 @@ namespace StarlitTides
     {
         public static LeaderboardClient Instance { get; private set; }
 
-        [Tooltip("Your Vercel deployment, e.g. https://starlit-tides.vercel.app (no trailing slash).")]
+        [Tooltip("The Vercel website address, without a / at the end.")]
         public string baseUrl = "https://starlit-tides.vercel.app";
         public int timeoutSeconds = 8;
         public string gameVersion = "1.0";
 
+        // One row of the leaderboard. The names match the JSON from the API.
         [Serializable]
         public class Entry
         {
@@ -42,103 +43,140 @@ namespace StarlitTides
             public string created_at;
         }
 
-        [Serializable] private class EntryList { public Entry[] scores; }
-        [Serializable] private class SubmitBody { public string name; public int score; public int orbs; public int distance; public int duration; public string version; }
-        [Serializable] private class SubmitReply { public long id; public int rank; public int score; public string error; }
-        [Serializable] private class ErrorReply { public string error; }
+        // JsonUtility can't read a bare list, so the API wraps it: { "scores": [ ... ] }
+        [Serializable] class EntryList { public Entry[] scores; }
+        [Serializable] class SubmitBody { public string name; public int score; public int orbs; public int distance; public int duration; public string version; }
+        [Serializable] class SubmitReply { public int rank; public int score; }
+        [Serializable] class ErrorReply { public string error; }
 
-        public bool IsConfigured => !string.IsNullOrEmpty(baseUrl) && !baseUrl.Contains("YOUR-PROJECT");
+        public bool IsConfigured { get { return !string.IsNullOrEmpty(baseUrl); } }
 
-        private void Awake()
+        void Awake()
         {
-            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
             Instance = this;
         }
 
-        private void OnDestroy()
+        void OnDestroy()
         {
             if (Instance == this) Instance = null;
         }
 
-        /// <summary>Submits the current run from ScoreManager. Callback: (success, rank, errorMessage).</summary>
+        // Sends the run that just ended (reads it from ScoreManager).
+        // onDone gets: success, rank, error message.
         public void SubmitScore(string playerName, Action<bool, int, string> onDone)
         {
-            ScoreManager sm = ScoreManager.Instance;
-            GameManager gm = GameManager.Instance;
-            if (sm == null) { onDone?.Invoke(false, 0, "No score to submit."); return; }
-            SubmitScore(playerName, sm.Score, sm.OrbsCollected, Mathf.FloorToInt(sm.Distance),
-                        Mathf.Max(1, Mathf.CeilToInt(gm != null ? gm.RunTime : 1f)), onDone);
+            ScoreManager scores = ScoreManager.Instance;
+            if (scores == null)
+            {
+                if (onDone != null) onDone(false, 0, "No score to submit.");
+                return;
+            }
+
+            float seconds = 1f;
+            if (GameManager.Instance != null) seconds = GameManager.Instance.RunTime;
+
+            SubmitScore(playerName, scores.Score, scores.OrbsCollected,
+                        Mathf.FloorToInt(scores.Distance), Mathf.Max(1, Mathf.CeilToInt(seconds)), onDone);
         }
 
         public void SubmitScore(string playerName, int score, int orbs, int distance, int durationSeconds, Action<bool, int, string> onDone)
         {
-            if (!IsConfigured) { onDone?.Invoke(false, 0, "Leaderboard URL not set."); return; }
-            var body = new SubmitBody
+            if (!IsConfigured)
             {
-                name = playerName, score = score, orbs = orbs, distance = distance,
-                duration = durationSeconds, version = gameVersion
-            };
-            StartCoroutine(PostRoutine(JsonUtility.ToJson(body), onDone));
+                if (onDone != null) onDone(false, 0, "Leaderboard address not set.");
+                return;
+            }
+
+            SubmitBody body = new SubmitBody();
+            body.name = playerName;
+            body.score = score;
+            body.orbs = orbs;
+            body.distance = distance;
+            body.duration = durationSeconds;
+            body.version = gameVersion;
+
+            StartCoroutine(PostScore(JsonUtility.ToJson(body), onDone));
         }
 
-        /// <summary>Downloads the top scores. Callback: (success, entries, errorMessage).</summary>
+        // Downloads the best scores. onDone gets: success, list of entries, error message.
         public void FetchTop(int limit, Action<bool, List<Entry>, string> onDone)
         {
-            if (!IsConfigured) { onDone?.Invoke(false, new List<Entry>(), "Leaderboard URL not set."); return; }
-            StartCoroutine(GetRoutine(Mathf.Clamp(limit, 1, 50), onDone));
+            if (!IsConfigured)
+            {
+                if (onDone != null) onDone(false, new List<Entry>(), "Leaderboard address not set.");
+                return;
+            }
+            StartCoroutine(GetTopScores(Mathf.Clamp(limit, 1, 50), onDone));
         }
 
-        private IEnumerator GetRoutine(int limit, Action<bool, List<Entry>, string> onDone)
+        IEnumerator GetTopScores(int limit, Action<bool, List<Entry>, string> onDone)
         {
-            using (UnityWebRequest req = UnityWebRequest.Get($"{baseUrl}/api/scores?limit={limit}"))
+            using (UnityWebRequest request = UnityWebRequest.Get(baseUrl + "/api/scores?limit=" + limit))
             {
-                req.timeout = timeoutSeconds;
-                yield return req.SendWebRequest();
+                request.timeout = timeoutSeconds;
+                yield return request.SendWebRequest();
 
-                if (req.result != UnityWebRequest.Result.Success)
+                if (request.result != UnityWebRequest.Result.Success)
                 {
-                    onDone?.Invoke(false, new List<Entry>(), ReadError(req));
+                    if (onDone != null) onDone(false, new List<Entry>(), ReadError(request));
                     yield break;
                 }
-                EntryList list = JsonUtility.FromJson<EntryList>(req.downloadHandler.text);
-                onDone?.Invoke(true, new List<Entry>(list?.scores ?? Array.Empty<Entry>()), null);
+
+                EntryList list = JsonUtility.FromJson<EntryList>(request.downloadHandler.text);
+                List<Entry> entries = new List<Entry>();
+                if (list != null && list.scores != null) entries.AddRange(list.scores);
+                if (onDone != null) onDone(true, entries, null);
             }
         }
 
-        private IEnumerator PostRoutine(string json, Action<bool, int, string> onDone)
+        IEnumerator PostScore(string json, Action<bool, int, string> onDone)
         {
-            using (var req = new UnityWebRequest($"{baseUrl}/api/scores", UnityWebRequest.kHttpVerbPOST))
+            using (UnityWebRequest request = new UnityWebRequest(baseUrl + "/api/scores", UnityWebRequest.kHttpVerbPOST))
             {
-                req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                req.timeout = timeoutSeconds;
-                yield return req.SendWebRequest();
+                request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "application/json");
+                request.timeout = timeoutSeconds;
+                yield return request.SendWebRequest();
 
-                if (req.result != UnityWebRequest.Result.Success)
+                if (request.result != UnityWebRequest.Result.Success)
                 {
-                    onDone?.Invoke(false, 0, ReadError(req));
+                    if (onDone != null) onDone(false, 0, ReadError(request));
                     yield break;
                 }
-                SubmitReply reply = JsonUtility.FromJson<SubmitReply>(req.downloadHandler.text);
-                onDone?.Invoke(true, reply != null ? reply.rank : 0, null);
+
+                SubmitReply reply = JsonUtility.FromJson<SubmitReply>(request.downloadHandler.text);
+                int rank = reply != null ? reply.rank : 0;
+                if (onDone != null) onDone(true, rank, null);
             }
         }
 
-        // Prefer the API's own error message ("Name must be 1-16 letters...").
-        private static string ReadError(UnityWebRequest req)
+        // Uses the API's own message when there is one (like "Name must be 1-16 letters...").
+        static string ReadError(UnityWebRequest request)
         {
-            string text = req.downloadHandler != null ? req.downloadHandler.text : null;
+            string text = null;
+            if (request.downloadHandler != null) text = request.downloadHandler.text;
+
             if (!string.IsNullOrEmpty(text))
             {
                 try
                 {
-                    ErrorReply e = JsonUtility.FromJson<ErrorReply>(text);
-                    if (e != null && !string.IsNullOrEmpty(e.error)) return e.error;
+                    ErrorReply reply = JsonUtility.FromJson<ErrorReply>(text);
+                    if (reply != null && !string.IsNullOrEmpty(reply.error)) return reply.error;
                 }
-                catch (ArgumentException) { /* not JSON */ }
+                catch (ArgumentException)
+                {
+                    // The reply wasn't JSON. Fall through to the generic message.
+                }
             }
-            return req.result == UnityWebRequest.Result.ConnectionError ? "No connection to the leaderboard." : req.error;
+
+            if (request.result == UnityWebRequest.Result.ConnectionError) return "No connection to the leaderboard.";
+            return request.error;
         }
     }
 }

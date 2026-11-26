@@ -1,14 +1,13 @@
-// =============================================================================
-//  FaceCamera - keeps a quad (orb halo) turned toward the camera (billboard)
-// =============================================================================
+// FaceCamera: keeps a flat quad turned toward the camera (a "billboard").
+// Used for the soft glow halos around the orbs and the boat's candle.
+
 using UnityEngine;
 
 namespace StarlitTides
 {
-    /// <summary>Keeps a quad facing the camera (orb halos).</summary>
     public class FaceCamera : MonoBehaviour
     {
-        private void LateUpdate()
+        void LateUpdate()
         {
             Camera cam = Camera.main;
             if (cam != null) transform.rotation = cam.transform.rotation;

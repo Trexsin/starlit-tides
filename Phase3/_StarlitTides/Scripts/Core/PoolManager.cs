@@ -1,14 +1,13 @@
-// =============================================================================
-//  PoolManager - object pooling for orbs, obstacles and particle effects
-// -----------------------------------------------------------------------------
-//  Instantiate() and Destroy() allocate memory and cause garbage-collector
-//  stutters. Instead, finished objects are switched off and stored in a
-//  stack per prefab; the next Spawn() re-uses one. After a few seconds of
-//  play the game creates no new objects at all.
+// PoolManager: re-uses objects instead of creating and destroying them.
 //
-//      GameObject go = PoolManager.Spawn(prefab, position, rotation);
-//      PoolManager.Despawn(go);
-// =============================================================================
+// Instantiate() and Destroy() allocate memory, and the garbage collector
+// cleaning that up causes small stutters. So when an orb or obstacle is done,
+// we switch it off and keep it in a stack. Next time we need one, we take it
+// from the stack and switch it back on.
+//
+//   GameObject orb = PoolManager.Spawn(orbPrefab, position, rotation);
+//   PoolManager.Despawn(orb);
+
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -17,91 +16,109 @@ namespace StarlitTides
 {
     public static class PoolManager
     {
-        private static readonly Dictionary<GameObject, Stack<GameObject>> Pools = new Dictionary<GameObject, Stack<GameObject>>();
-        private static Transform _root;
+        // One stack of switched-off objects for each prefab.
+        static Dictionary<GameObject, Stack<GameObject>> pools = new Dictionary<GameObject, Stack<GameObject>>();
+        static Transform poolParent;
 
-        // Pools hold scene objects, so empty them whenever a scene loads
-        // (e.g. Retry reloads the scene) and when entering Play mode.
+        // Static data survives between Play sessions, so clear it when the game
+        // starts and whenever a scene is (re)loaded, e.g. when you press Retry.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetStatics()
+        static void ResetPools()
         {
-            Pools.Clear();
-            _root = null;
+            pools.Clear();
+            poolParent = null;
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
-        private static void OnSceneLoaded(Scene s, LoadSceneMode mode)
+        static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (mode == LoadSceneMode.Single) { Pools.Clear(); _root = null; }
+            if (mode == LoadSceneMode.Single)
+            {
+                pools.Clear();
+                poolParent = null;
+            }
         }
 
-        private static Transform Root
+        // Keeps the Hierarchy tidy: all pooled objects live under "[Pool]".
+        static Transform PoolParent
         {
             get
             {
-                if (_root == null) _root = new GameObject("[Pool]").transform;
-                return _root;
+                if (poolParent == null) poolParent = new GameObject("[Pool]").transform;
+                return poolParent;
             }
         }
 
-        /// <summary>Gets an inactive copy of 'prefab' (or creates one), places it and activates it.</summary>
+        static Stack<GameObject> GetStack(GameObject prefab)
+        {
+            Stack<GameObject> stack;
+            if (!pools.TryGetValue(prefab, out stack))
+            {
+                stack = new Stack<GameObject>();
+                pools[prefab] = stack;
+            }
+            return stack;
+        }
+
+        // Takes a switched-off copy from the pool (or makes a new one) and switches it on.
         public static GameObject Spawn(GameObject prefab, Vector3 position, Quaternion rotation)
         {
             if (prefab == null) return null;
-            if (!Pools.TryGetValue(prefab, out Stack<GameObject> stack))
-            {
-                stack = new Stack<GameObject>();
-                Pools[prefab] = stack;
-            }
+            Stack<GameObject> stack = GetStack(prefab);
 
-            GameObject go = null;
-            while (stack.Count > 0 && go == null) go = stack.Pop();   // skip anything destroyed externally
+            // Skip anything that was destroyed by something else.
+            GameObject obj = null;
+            while (stack.Count > 0 && obj == null) obj = stack.Pop();
 
-            if (go == null)
+            if (obj == null)
             {
-                go = Object.Instantiate(prefab, position, rotation, Root);
-                var po = go.GetComponent<PooledObject>();
-                if (po == null) po = go.AddComponent<PooledObject>();
-                po.prefab = prefab;
+                obj = Object.Instantiate(prefab, position, rotation, PoolParent);
+                PooledObject tag = obj.GetComponent<PooledObject>();
+                if (tag == null) tag = obj.AddComponent<PooledObject>();
+                tag.prefab = prefab;
             }
             else
             {
-                go.transform.SetPositionAndRotation(position, rotation);
+                obj.transform.SetPositionAndRotation(position, rotation);
             }
 
-            go.GetComponent<PooledObject>().inPool = false;
-            go.SetActive(true);   // OnEnable runs with the correct position
-            return go;
+            obj.GetComponent<PooledObject>().inPool = false;
+            // Position first, then activate, so OnEnable sees the right position.
+            obj.SetActive(true);
+            return obj;
         }
 
-        /// <summary>Returns an object to its pool (or destroys it if it was never pooled).</summary>
-        public static void Despawn(GameObject go)
+        // Switches the object off and puts it back in its pool.
+        public static void Despawn(GameObject obj)
         {
-            if (go == null) return;
-            var po = go.GetComponent<PooledObject>();
-            if (po == null || po.prefab == null) { Object.Destroy(go); return; }
-            if (po.inPool) return;   // already returned
+            if (obj == null) return;
 
-            po.inPool = true;
-            go.SetActive(false);
-            go.transform.SetParent(Root, false);
-            if (!Pools.TryGetValue(po.prefab, out Stack<GameObject> stack))
+            PooledObject tag = obj.GetComponent<PooledObject>();
+            if (tag == null || tag.prefab == null)
             {
-                stack = new Stack<GameObject>();
-                Pools[po.prefab] = stack;
+                // Not from a pool, so just destroy it.
+                Object.Destroy(obj);
+                return;
             }
-            stack.Push(go);
+            if (tag.inPool) return;   // already returned
+
+            tag.inPool = true;
+            obj.SetActive(false);
+            obj.transform.SetParent(PoolParent, false);
+            GetStack(tag.prefab).Push(obj);
         }
 
-        /// <summary>Creates 'count' inactive copies up front so the first spawns don't stutter.</summary>
+        // Makes some copies at the start so the first spawns don't stutter.
         public static void Prewarm(GameObject prefab, int count)
         {
             if (prefab == null) return;
-            var temp = new List<GameObject>(count);
-            for (int i = 0; i < count; i++) temp.Add(Spawn(prefab, new Vector3(0, -500, 0), Quaternion.identity));
-            foreach (GameObject go in temp) Despawn(go);
+
+            List<GameObject> made = new List<GameObject>();
+            for (int i = 0; i < count; i++)
+                made.Add(Spawn(prefab, new Vector3(0f, -500f, 0f), Quaternion.identity));
+
+            foreach (GameObject obj in made) Despawn(obj);
         }
     }
-
 }

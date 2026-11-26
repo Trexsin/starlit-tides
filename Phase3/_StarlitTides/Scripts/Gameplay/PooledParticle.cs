@@ -1,37 +1,40 @@
-// =============================================================================
-//  PooledParticle - plays a particle effect and returns it to the pool when done
-// =============================================================================
+// PooledParticle: plays a particle effect when it's spawned, then puts itself
+// back in the pool once all its particles are gone.
+
 using UnityEngine;
 
 namespace StarlitTides
 {
-    /// <summary>Plays a particle effect on spawn and returns it to the pool when done.</summary>
     public class PooledParticle : MonoBehaviour
     {
-        private ParticleSystem[] _systems;
-        private float _life;
-        private float _timer;
+        ParticleSystem[] systems;
+        float lifetime;   // how long the longest particle can live
+        float timer;
 
-        private void Awake()
+        void Awake()
         {
-            _systems = GetComponentsInChildren<ParticleSystem>(true);
-            foreach (ParticleSystem ps in _systems)
+            systems = GetComponentsInChildren<ParticleSystem>(true);
+            foreach (ParticleSystem ps in systems)
             {
-                var main = ps.main;
-                _life = Mathf.Max(_life, main.duration + main.startLifetime.constantMax);
+                float total = ps.main.duration + ps.main.startLifetime.constantMax;
+                lifetime = Mathf.Max(lifetime, total);
             }
         }
 
-        private void OnEnable()
+        void OnEnable()
         {
-            _timer = 0f;
-            foreach (ParticleSystem ps in _systems) { ps.Clear(true); ps.Play(true); }
+            timer = 0f;
+            foreach (ParticleSystem ps in systems)
+            {
+                ps.Clear(true);
+                ps.Play(true);
+            }
         }
 
-        private void Update()
+        void Update()
         {
-            _timer += Time.deltaTime;
-            if (_timer >= _life) PoolManager.Despawn(gameObject);
+            timer += Time.deltaTime;
+            if (timer >= lifetime) PoolManager.Despawn(gameObject);
         }
     }
 }

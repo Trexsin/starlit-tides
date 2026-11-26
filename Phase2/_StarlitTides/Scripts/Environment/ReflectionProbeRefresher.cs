@@ -1,13 +1,12 @@
-// =============================================================================
-//  ReflectionProbeRefresher - re-renders the sea's reflection probe
-// -----------------------------------------------------------------------------
-//  The ocean reflects the sky, the moon and the glowing village through a
-//  realtime reflection probe set to "Via Scripting". We render it once at
-//  start and again whenever the weather changes (Phase 4 calls Refresh()),
-//  so the reflections always match the current sky without re-rendering six
-//  cube faces every frame.
-// =============================================================================
+// ReflectionProbeRefresher: updates the reflections on the sea.
+//
+// The sea reflects the sky, moon and village lights using a reflection probe.
+// Rendering a probe is expensive (6 camera renders), so instead of every frame
+// we render it once at the start and again when the weather changes
+// (Phase 4 calls Refresh()).
+
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace StarlitTides
 {
@@ -16,40 +15,44 @@ namespace StarlitTides
     {
         public static ReflectionProbeRefresher Instance { get; private set; }
 
-        [Tooltip("Also refresh every N seconds (0 = only on start and when asked).")]
+        [Tooltip("Also refresh every this many seconds. 0 = only when asked.")]
         public float autoRefreshInterval = 0f;
 
-        private ReflectionProbe _probe;
-        private float _timer;
+        ReflectionProbe probe;
+        float timer;
 
-        private void OnEnable()
+        void OnEnable()
         {
             Instance = this;
-            _probe = GetComponent<ReflectionProbe>();
+            probe = GetComponent<ReflectionProbe>();
         }
 
-        private void OnDisable()
+        void OnDisable()
         {
             if (Instance == this) Instance = null;
         }
 
-        private void Start()
+        void Start()
         {
             Refresh();
         }
 
-        private void Update()
+        void Update()
         {
             if (autoRefreshInterval <= 0f) return;
-            _timer += Time.unscaledDeltaTime;
-            if (_timer >= autoRefreshInterval) { _timer = 0f; Refresh(); }
+
+            timer += Time.unscaledDeltaTime;
+            if (timer >= autoRefreshInterval)
+            {
+                timer = 0f;
+                Refresh();
+            }
         }
 
-        /// <summary>Re-capture the surroundings (spread over several frames by Unity).</summary>
         public void Refresh()
         {
-            if (_probe != null && _probe.mode == UnityEngine.Rendering.ReflectionProbeMode.Realtime)
-                _probe.RenderProbe();
+            if (probe != null && probe.mode == ReflectionProbeMode.Realtime)
+                probe.RenderProbe();
         }
     }
 }

@@ -1,17 +1,15 @@
-// =============================================================================
-//  BoatController - steering, dashing and floating the paper boat
-// -----------------------------------------------------------------------------
-//  The boat lives in a fixed "play lane" near the world origin (see the Phase 1
-//  design decision): it moves left/right and a little forward/back, while the
-//  tide carries the world toward it.
+// BoatController: steers, dashes and floats the paper boat.
 //
-//  * Smooth steering: velocity eases toward the input (acceleration + drag)
-//  * Dash (Space): a short burst of speed with a brief moment of invincibility
-//  * Floating: height and tilt come from OceanController.GetWaterHeight/Normal,
-//    the same maths as the ocean shader, so it rides the visible waves
-//  * Banking: the boat leans and turns into its movement like a real boat
-//  * Collisions: trigger colliders on orbs and obstacles call back into here
-// =============================================================================
+// The boat stays inside a small "play lane" near the middle of the world.
+// It never really travels forward: the tide carries everything else toward it.
+//
+// - Steering: the velocity eases toward the input, so it feels smooth.
+// - Dash (Space): a quick burst of speed, and you can't be hit for a moment.
+// - Floating: the height and tilt come from the same wave maths as the ocean
+//   shader (OceanController), so the boat rides the waves you can see.
+// - Banking: the boat leans into turns like a real boat.
+// - Collisions: orbs and obstacles have trigger colliders that call OnTriggerEnter.
+
 using System;
 using System.Collections;
 using UnityEngine;
@@ -26,15 +24,15 @@ namespace StarlitTides
         public static event Action OnDash;
         public static event Action<Obstacle> OnHit;
 
-        [Header("Play lane (world X / Z limits)")]
+        [Header("Play lane limits (world X and Z)")]
         public Vector2 laneX = new Vector2(-7f, 7f);
         public Vector2 laneZ = new Vector2(-3f, 12f);
 
         [Header("Steering")]
-        public float lateralSpeed = 9f;
-        public float forwardSpeed = 6f;
-        public float acceleration = 7f;      // how quickly velocity reaches the input
-        public float edgeSoftness = 1.2f;    // slows down near the lane edges
+        public float lateralSpeed = 9f;      // left/right
+        public float forwardSpeed = 6f;      // forward/back
+        public float acceleration = 7f;      // how quickly we reach the input speed
+        public float edgeSoftness = 1.2f;    // slow down this close to the lane edge
 
         [Header("Dash")]
         public float dashSpeed = 24f;
@@ -46,115 +44,163 @@ namespace StarlitTides
         public float hitInvulnerability = 1.0f;
         public Renderer[] blinkRenderers;
 
-        [Header("Floating and banking")]
+        [Header("Floating and leaning")]
         public float floatHeight = 0.02f;
         public float bankAngle = 18f;        // roll when moving sideways
-        public float turnAngle = 12f;        // yaw when moving sideways
+        public float turnAngle = 12f;        // turn the nose when moving sideways
         public float pitchFromSpeed = 4f;
-        public float tiltFollow = 6f;        // how quickly the boat follows the wave slope
+        public float tiltFollow = 6f;        // how fast the boat follows the wave slope
 
         [Header("References")]
         public LightMeter lightMeter;
-        public Transform visual;              // the mesh child that tilts and bobs
+        public Transform visual;             // the model that tilts and leans
 
-        public Vector3 Velocity => _velocity;
-        public bool IsDashing => Time.time < _dashEnd;
-        public bool IsInvulnerable => Time.time < _invulnerableUntil;
-        public float DashCooldown01 => Mathf.Clamp01((Time.time - _lastDash) / dashCooldown);
+        public Vector3 Velocity { get { return velocity; } }
+        public bool IsDashing { get { return Time.time < dashEndTime; } }
+        public bool IsInvulnerable { get { return Time.time < invulnerableUntil; } }
+        // 0 right after a dash, 1 when the dash is ready again.
+        public float DashCooldown01 { get { return Mathf.Clamp01((Time.time - lastDashTime) / dashCooldown); } }
 
-        private Vector3 _velocity;
-        private Vector3 _dashDir;
-        private float _dashEnd = -10f, _lastDash = -10f, _invulnerableUntil;
-        private Quaternion _tilt = Quaternion.identity;
-        private bool _sinking;
+        Vector3 velocity;
+        Vector3 dashDirection;
+        float dashEndTime = -10f;
+        float lastDashTime = -10f;
+        float invulnerableUntil;
+        Quaternion waveTilt = Quaternion.identity;
+        bool sinking;
 
-        private void Awake()
+        void Awake()
         {
             Instance = this;
-            var rb = GetComponent<Rigidbody>();
-            rb.isKinematic = true;             // we move it ourselves; it only reports triggers
-            rb.interpolation = RigidbodyInterpolation.None;
+
+            // Kinematic: we move the boat ourselves. The Rigidbody is only
+            // there so trigger collisions get reported.
+            Rigidbody body = GetComponent<Rigidbody>();
+            body.isKinematic = true;
+
             if (visual == null && transform.childCount > 0) visual = transform.GetChild(0);
         }
 
-        private void OnDestroy()
+        void OnDestroy()
         {
             if (Instance == this) Instance = null;
         }
 
-        private void Update()
+        void Update()
         {
-            if (_sinking) return;
-            float dt = Time.deltaTime;
-            Vector2 input = StarlitInput.Instance != null ? StarlitInput.Instance.Move : Vector2.zero;
+            if (sinking) return;
 
-            // ---- dash ----
-            if (StarlitInput.Instance != null && StarlitInput.Instance.DashPressed && Time.time - _lastDash >= dashCooldown)
-            {
-                Vector3 dir = new Vector3(input.x, 0f, input.y);
-                if (dir.sqrMagnitude < 0.01f) dir = new Vector3(Mathf.Sign(_velocity.x == 0 ? 1 : _velocity.x), 0, 0.3f);
-                _dashDir = dir.normalized;
-                _lastDash = Time.time;
-                _dashEnd = Time.time + dashDuration;
-                _invulnerableUntil = Mathf.Max(_invulnerableUntil, Time.time + dashInvulnerability);
-                OnDash?.Invoke();
-            }
+            Vector2 input = Vector2.zero;
+            if (StarlitInput.Instance != null) input = StarlitInput.Instance.Move;
 
-            // ---- steering ----
-            Vector3 target = new Vector3(input.x * lateralSpeed, 0f, input.y * forwardSpeed);
-            if (IsDashing) target = _dashDir * dashSpeed;
-            float k = 1f - Mathf.Exp(-(IsDashing ? 30f : acceleration) * dt);   // frame-rate independent easing
-            _velocity = Vector3.Lerp(_velocity, target, k);
-
-            Vector3 pos = transform.position + _velocity * dt;
-
-            // soft lane edges: slow down and stop at the limits
-            pos.x = SoftClamp(pos.x, laneX.x, laneX.y, ref _velocity.x);
-            pos.z = SoftClamp(pos.z, laneZ.x, laneZ.y, ref _velocity.z);
-
-            // ---- float on the waves ----
-            OceanController ocean = OceanController.Instance;
-            Vector3 waterNormal = Vector3.up;
-            if (ocean != null)
-            {
-                pos.y = ocean.GetWaterHeight(pos) + floatHeight;
-                waterNormal = ocean.GetWaterNormal(pos);
-            }
-            transform.position = pos;
-
-            // ---- tilt: follow the wave slope + bank into turns ----
-            Quaternion slope = Quaternion.FromToRotation(Vector3.up, Vector3.Lerp(Vector3.up, waterNormal, 0.8f));
-            _tilt = Quaternion.Slerp(_tilt, slope, 1f - Mathf.Exp(-tiltFollow * dt));
-            float roll = -_velocity.x / lateralSpeed * bankAngle;
-            float yaw = _velocity.x / lateralSpeed * turnAngle;
-            float pitch = -_velocity.z / forwardSpeed * pitchFromSpeed;
-            Quaternion bank = Quaternion.Euler(pitch, yaw, roll);
-            if (visual != null) visual.rotation = _tilt * bank;
-
-            // ---- blink while invulnerable after a hit ----
-            bool blinking = Time.time < _invulnerableUntil && !IsDashing && Time.time - _lastDash > dashInvulnerability;
-            if (blinkRenderers != null)
-                foreach (Renderer r in blinkRenderers)
-                    if (r != null) r.enabled = !blinking || Mathf.Repeat(Time.time * 12f, 1f) > 0.35f;
+            TryDash(input);
+            Steer(input);
+            FloatAndTilt();
+            BlinkWhileInvulnerable();
         }
 
-        private float SoftClamp(float value, float min, float max, ref float velocity)
+        void TryDash(Vector2 input)
         {
-            if (value < min + edgeSoftness && velocity < 0f) velocity *= Mathf.Clamp01((value - min) / edgeSoftness);
-            if (value > max - edgeSoftness && velocity > 0f) velocity *= Mathf.Clamp01((max - value) / edgeSoftness);
+            if (StarlitInput.Instance == null || !StarlitInput.Instance.DashPressed) return;
+            if (Time.time - lastDashTime < dashCooldown) return;
+
+            // Dash the way the player is steering. With no input, dash sideways
+            // in the direction we're already moving (or right if we're still).
+            Vector3 direction = new Vector3(input.x, 0f, input.y);
+            if (direction.sqrMagnitude < 0.01f)
+            {
+                float side = velocity.x < 0f ? -1f : 1f;
+                direction = new Vector3(side, 0f, 0.3f);
+            }
+
+            dashDirection = direction.normalized;
+            lastDashTime = Time.time;
+            dashEndTime = Time.time + dashDuration;
+            invulnerableUntil = Mathf.Max(invulnerableUntil, Time.time + dashInvulnerability);
+            if (OnDash != null) OnDash();
+        }
+
+        void Steer(Vector2 input)
+        {
+            float dt = Time.deltaTime;
+
+            Vector3 targetVelocity = new Vector3(input.x * lateralSpeed, 0f, input.y * forwardSpeed);
+            float response = acceleration;
+            if (IsDashing)
+            {
+                targetVelocity = dashDirection * dashSpeed;
+                response = 30f;
+            }
+
+            // Ease toward the target. Using Exp() makes it feel the same at any frame rate.
+            float blend = 1f - Mathf.Exp(-response * dt);
+            velocity = Vector3.Lerp(velocity, targetVelocity, blend);
+
+            Vector3 position = transform.position + velocity * dt;
+            position.x = SoftClamp(position.x, laneX.x, laneX.y, ref velocity.x);
+            position.z = SoftClamp(position.z, laneZ.x, laneZ.y, ref velocity.z);
+            transform.position = position;
+        }
+
+        // Keeps a value inside min..max, and slows the velocity down near the edges.
+        float SoftClamp(float value, float min, float max, ref float speed)
+        {
+            if (value < min + edgeSoftness && speed < 0f) speed *= Mathf.Clamp01((value - min) / edgeSoftness);
+            if (value > max - edgeSoftness && speed > 0f) speed *= Mathf.Clamp01((max - value) / edgeSoftness);
             return Mathf.Clamp(value, min, max);
         }
 
-        // ---------------------------------------------------------------------
-        // Collisions (trigger colliders on orbs and obstacles)
-        // ---------------------------------------------------------------------
-        private void OnTriggerEnter(Collider other)
+        void FloatAndTilt()
         {
-            if (_sinking) return;
+            Vector3 position = transform.position;
+            Vector3 waterNormal = Vector3.up;
+
+            OceanController ocean = OceanController.Instance;
+            if (ocean != null)
+            {
+                position.y = ocean.GetWaterHeight(position) + floatHeight;
+                waterNormal = ocean.GetWaterNormal(position);
+            }
+            transform.position = position;
+
+            // Tilt with the wave slope (80% of it, so it isn't too wobbly).
+            Vector3 up = Vector3.Lerp(Vector3.up, waterNormal, 0.8f);
+            Quaternion slope = Quaternion.FromToRotation(Vector3.up, up);
+            waveTilt = Quaternion.Slerp(waveTilt, slope, 1f - Mathf.Exp(-tiltFollow * Time.deltaTime));
+
+            // Lean and turn into the movement.
+            float roll = -velocity.x / lateralSpeed * bankAngle;
+            float yaw = velocity.x / lateralSpeed * turnAngle;
+            float pitch = -velocity.z / forwardSpeed * pitchFromSpeed;
+            Quaternion lean = Quaternion.Euler(pitch, yaw, roll);
+
+            if (visual != null) visual.rotation = waveTilt * lean;
+        }
+
+        // After a crash the boat blinks until it can be hit again.
+        void BlinkWhileInvulnerable()
+        {
+            if (blinkRenderers == null) return;
+
+            bool fromDash = Time.time - lastDashTime <= dashInvulnerability;
+            bool blinking = IsInvulnerable && !IsDashing && !fromDash;
+            bool visible = !blinking || Mathf.Repeat(Time.time * 12f, 1f) > 0.35f;
+
+            foreach (Renderer r in blinkRenderers)
+                if (r != null) r.enabled = visible;
+        }
+
+        void OnTriggerEnter(Collider other)
+        {
+            if (sinking) return;
             if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) return;
 
             Orb orb = other.GetComponentInParent<Orb>();
-            if (orb != null) { orb.Collect(this); return; }
+            if (orb != null)
+            {
+                orb.Collect(this);
+                return;
+            }
 
             Obstacle obstacle = other.GetComponentInParent<Obstacle>();
             if (obstacle != null) TakeHit(obstacle);
@@ -163,36 +209,41 @@ namespace StarlitTides
         public void TakeHit(Obstacle obstacle)
         {
             if (IsInvulnerable || obstacle.HasHitBoat) return;
+
             obstacle.OnBoatHit(this);
-            _invulnerableUntil = Time.time + hitInvulnerability;
-            // knock the boat away from the obstacle
+            invulnerableUntil = Time.time + hitInvulnerability;
+
+            // Bounce away from the obstacle.
             Vector3 away = transform.position - obstacle.transform.position;
             away.y = 0f;
-            _velocity = away.normalized * 8f;
+            velocity = away.normalized * 8f;
+
             if (lightMeter != null) lightMeter.Damage(obstacle.lightDamage);
-            OnHit?.Invoke(obstacle);
+            if (OnHit != null) OnHit(obstacle);
         }
 
-        /// <summary>Game over: the boat's light dies and it slowly sinks into the dark water.</summary>
+        // Game over: the light is gone and the boat slowly sinks.
         public void Sink(float duration)
         {
-            if (_sinking) return;
-            _sinking = true;
+            if (sinking) return;
+            sinking = true;
             StartCoroutine(SinkRoutine(duration));
         }
 
-        private IEnumerator SinkRoutine(float duration)
+        IEnumerator SinkRoutine(float duration)
         {
-            Vector3 start = transform.position;
-            Quaternion startRot = visual != null ? visual.rotation : Quaternion.identity;
-            Quaternion endRot = startRot * Quaternion.Euler(25f, 0f, 35f);
+            Vector3 startPosition = transform.position;
+            Quaternion startRotation = Quaternion.identity;
+            if (visual != null) startRotation = visual.rotation;
+            Quaternion endRotation = startRotation * Quaternion.Euler(25f, 0f, 35f);
+
             float t = 0f;
             while (t < 1f)
             {
                 t += Time.unscaledDeltaTime / duration;
-                float e = t * t;
-                transform.position = start + Vector3.down * (1.2f * e) + Vector3.back * (3f * t);
-                if (visual != null) visual.rotation = Quaternion.Slerp(startRot, endRot, e);
+                float eased = t * t;   // starts slow, speeds up
+                transform.position = startPosition + Vector3.down * (1.2f * eased) + Vector3.back * (3f * t);
+                if (visual != null) visual.rotation = Quaternion.Slerp(startRotation, endRotation, eased);
                 yield return null;
             }
         }

@@ -1,12 +1,11 @@
-// =============================================================================
-//  ScoreManager - distance survived + orbs collected, with multipliers
-// -----------------------------------------------------------------------------
-//  Score = distance points + orb points + bonus points
-//    distance : 1 point per metre the tide carries you
-//    orbs     : 50 points each x combo multiplier (Phase 4, Feature 2)
-//    bonuses  : near misses etc. (Phase 4, Feature 5)
-//  The Starburst power-up (Feature 3) doubles everything via powerUpMultiplier.
-// =============================================================================
+// ScoreManager: adds up the score.
+//
+//   score = distance points + orb points + bonus points
+//   - distance: 1 point per metre the tide carries you
+//   - orbs:     50 points each, times the combo multiplier (added in Phase 4)
+//   - bonuses:  near misses and events (Phase 4)
+// The Starburst power-up (Phase 4) doubles everything using powerUpMultiplier.
+
 using System;
 using UnityEngine;
 
@@ -16,70 +15,100 @@ namespace StarlitTides
     {
         public static ScoreManager Instance { get; private set; }
 
-        /// <summary>(newScore, pointsJustAdded)</summary>
+        // Sends (new score, points just added).
         public static event Action<int, int> OnScoreChanged;
-        public static event Action<int> OnOrbCollected;   // total orbs
+        // Sends the total number of orbs collected.
+        public static event Action<int> OnOrbCollected;
 
         public int pointsPerOrb = 50;
         public float pointsPerMetre = 1f;
 
-        [Header("Multipliers (set by Combo / Starburst in Phase 4)")]
+        [Header("Multipliers (set by Phase 4 features)")]
         public float comboMultiplier = 1f;
         public float powerUpMultiplier = 1f;
 
         public float Distance { get; private set; }
         public int OrbsCollected { get; private set; }
-        public int Score => Mathf.FloorToInt(_score);
+        public int Score { get { return Mathf.FloorToInt(score); } }
         public int BestCombo { get; set; }
         public int NearMisses { get; set; }
-        public float TotalMultiplier => comboMultiplier * powerUpMultiplier;
+        public float TotalMultiplier { get { return comboMultiplier * powerUpMultiplier; } }
 
-        private float _score;
-        private int _lastReported;
+        // Kept as a float so fractions of a metre still count.
+        float score;
+        int lastReportedScore;
 
-        private void Awake() { Instance = this; }
-        private void OnDestroy() { if (Instance == this) Instance = null; }
+        void Awake()
+        {
+            Instance = this;
+        }
 
-        private void OnEnable() { GameManager.OnRunStarted += ResetScore; }
-        private void OnDisable() { GameManager.OnRunStarted -= ResetScore; }
+        void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        void OnEnable()
+        {
+            GameManager.OnRunStarted += ResetScore;
+        }
+
+        void OnDisable()
+        {
+            GameManager.OnRunStarted -= ResetScore;
+        }
 
         public void ResetScore()
         {
-            _score = 0f; Distance = 0f; OrbsCollected = 0; BestCombo = 0; NearMisses = 0; _lastReported = 0;
-            comboMultiplier = 1f; powerUpMultiplier = 1f;
-            OnScoreChanged?.Invoke(0, 0);
+            score = 0f;
+            Distance = 0f;
+            OrbsCollected = 0;
+            BestCombo = 0;
+            NearMisses = 0;
+            lastReportedScore = 0;
+            comboMultiplier = 1f;
+            powerUpMultiplier = 1f;
+            if (OnScoreChanged != null) OnScoreChanged(0, 0);
         }
 
-        private void Update()
+        void Update()
         {
             if (GameManager.Instance == null || !GameManager.Instance.IsPlaying) return;
-            OceanController ocean = OceanController.Instance;
-            if (ocean == null) return;
+            if (OceanController.Instance == null) return;
 
-            float metres = ocean.tideSpeed * Time.deltaTime;
+            // Distance travelled this frame = tide speed * time.
+            float metres = OceanController.Instance.tideSpeed * Time.deltaTime;
             Distance += metres;
-            _score += metres * pointsPerMetre * powerUpMultiplier;
-            if (Score != _lastReported) { OnScoreChanged?.Invoke(Score, Score - _lastReported); _lastReported = Score; }
+            score += metres * pointsPerMetre * powerUpMultiplier;
+
+            // Only tell listeners when the whole-number score changes.
+            if (Score != lastReportedScore) ReportScore();
         }
 
         public void AddOrb()
         {
             OrbsCollected++;
             AddPoints(pointsPerOrb * TotalMultiplier);
-            OnOrbCollected?.Invoke(OrbsCollected);
+            if (OnOrbCollected != null) OnOrbCollected(OrbsCollected);
         }
 
-        /// <summary>Extra points (near miss, events). Starburst doubles these too.</summary>
+        // Extra points from near misses and events. Starburst doubles these too.
         public void AddBonus(float points)
         {
             AddPoints(points * powerUpMultiplier);
         }
 
-        private void AddPoints(float points)
+        void AddPoints(float points)
         {
-            _score += points;
-            OnScoreChanged?.Invoke(Score, Score - _lastReported);
-            _lastReported = Score;
+            score += points;
+            ReportScore();
+        }
+
+        void ReportScore()
+        {
+            int added = Score - lastReportedScore;
+            lastReportedScore = Score;
+            if (OnScoreChanged != null) OnScoreChanged(Score, added);
         }
     }
 }
