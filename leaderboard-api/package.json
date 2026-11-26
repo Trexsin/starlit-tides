@@ -1,0 +1,17 @@
+{
+  "name": "starlit-tides-leaderboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Global leaderboard API for Starlit Tides (Vercel serverless functions + Neon Postgres)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/",
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  }
+}
