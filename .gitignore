@@ -24,3 +24,7 @@ node_modules/
 *.csproj
 *.sln
 *.slnx
+
+# Visual Studio / Rider caches
+.vs/
+.idea/

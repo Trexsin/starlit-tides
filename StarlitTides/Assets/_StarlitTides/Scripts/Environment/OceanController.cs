@@ -34,6 +34,8 @@ namespace StarlitTides
         [Header("Weather and power-ups")]
         [Tooltip("1 = calm night, about 1.8 = storm.")]
         [Range(0f, 3f)] public float waveScale = 1f;
+        [Tooltip("Extra swell on top of waveScale (the whale's splash). 1 = waves twice as big.")]
+        [Range(0f, 3f)] public float swell = 0f;
         [Tooltip("Starburst: 0 = off, 1 = the whole sea glows.")]
         [Range(0f, 1f)] public float seaGlowBoost = 0f;
         [ColorUsage(false, true)] public Color seaGlowColor = new Color(1.1f, 0.6f, 0.12f);
@@ -171,7 +173,7 @@ namespace StarlitTides
 
             Shader.SetGlobalFloat("_OceanTime", oceanTime);
             Shader.SetGlobalFloat("_TideOffset", tideOffset);
-            Shader.SetGlobalFloat("_WaveScale", waveScale);
+            Shader.SetGlobalFloat("_WaveScale", waveScale * (1f + swell));
             Shader.SetGlobalFloat("_SeaGlowBoost", seaGlowBoost);
             Shader.SetGlobalColor("_SeaGlowColor", seaGlowColor);
             Shader.SetGlobalFloat("_SeaNightGlow", nightGlow);
@@ -266,7 +268,7 @@ namespace StarlitTides
             float lagoonDistance = Mathf.Sqrt(lagoonX * lagoonX + lagoonZ * lagoonZ);   // < 1 means inside
             float lagoonFade = SmoothStep(0.7f, 1.3f, lagoonDistance);
 
-            return farFade * lagoonFade * waveScale;
+            return farFade * lagoonFade * waveScale * (1f + swell);
         }
 
         // Same as HLSL's smoothstep().

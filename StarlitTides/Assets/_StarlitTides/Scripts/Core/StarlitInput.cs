@@ -23,6 +23,10 @@ namespace StarlitTides
         // Turned off during menus, cutscenes and game over.
         public bool gameplayEnabled = true;
 
+        // Set by the UI while the player types in a text box (e.g. their name),
+        // so typing "r" or "p" doesn't restart the game or open photo mode.
+        public static bool TextFieldFocused;
+
         InputAction moveAction;
         InputAction dashAction;
         InputAction pauseAction;
@@ -42,8 +46,8 @@ namespace StarlitTides
 
         public bool DashPressed { get { return gameplayEnabled && dashAction.WasPressedThisFrame(); } }
         public bool PausePressed { get { return pauseAction.WasPressedThisFrame(); } }
-        public bool RestartPressed { get { return restartAction.WasPressedThisFrame(); } }
-        public bool PhotoModePressed { get { return photoAction.WasPressedThisFrame(); } }
+        public bool RestartPressed { get { return !TextFieldFocused && restartAction.WasPressedThisFrame(); } }
+        public bool PhotoModePressed { get { return !TextFieldFocused && photoAction.WasPressedThisFrame(); } }
         public bool SkipPressed { get { return skipAction.WasPressedThisFrame(); } }
 
         void Awake()

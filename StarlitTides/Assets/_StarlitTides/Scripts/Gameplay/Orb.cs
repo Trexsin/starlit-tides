@@ -20,22 +20,44 @@ namespace StarlitTides
         public Transform visual;
         public float pulseAmount = 0.08f;
 
-        // Hidden orbs (Phase 5) stay invisible until the lighthouse beam finds them.
+        // Hidden orbs (Bonus 8) stay invisible until the lighthouse beam finds them.
         [HideInInspector] public bool isHidden;
+        // True if this orb started hidden (it's worth a bonus even after it's revealed).
+        public bool IsSecret { get; private set; }
 
         Vector3 baseScale = Vector3.one;
         bool collected;
+        Collider[] colliders;
+        WaterDisturber glow;
+        float defaultLightValue;
 
         void Awake()
         {
             if (visual == null && transform.childCount > 0) visual = transform.GetChild(0);
             if (visual != null) baseScale = visual.localScale;
+            colliders = GetComponentsInChildren<Collider>(true);
+            glow = GetComponent<WaterDisturber>();
+            defaultLightValue = lightValue;
         }
 
         protected override void OnSpawned()
         {
+            // Pooled orbs are re-used, so reset everything a hidden orb may have changed.
             collected = false;
-            isHidden = false;
+            lightValue = defaultLightValue;
+            IsSecret = false;
+            SetHidden(false);
+        }
+
+        // Hidden orbs can't be seen or collected and don't glow on the water.
+        public void SetHidden(bool hidden)
+        {
+            isHidden = hidden;
+            if (hidden) IsSecret = true;
+            if (visual != null) visual.gameObject.SetActive(!hidden);
+            if (colliders != null)
+                foreach (Collider c in colliders) c.enabled = !hidden;
+            if (glow != null) glow.enabled = !hidden;
         }
 
         protected override void Tick(float dt)

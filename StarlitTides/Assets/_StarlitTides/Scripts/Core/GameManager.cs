@@ -80,6 +80,9 @@ namespace StarlitTides
             StarlitInput input = StarlitInput.Instance;
             if (input == null) return;
 
+            // Photo mode uses Esc to close itself, so don't pause or restart while it's open.
+            if (PhotoMode.IsActive) return;
+
             // Esc toggles pause.
             if (input.PausePressed)
             {

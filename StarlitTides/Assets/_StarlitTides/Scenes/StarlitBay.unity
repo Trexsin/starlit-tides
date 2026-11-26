@@ -5765,6 +5765,119 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 131729391}
   m_Mesh: {fileID: 4300000, guid: 3e9cb581184d443c083805dd731952ae, type: 2}
+--- !u!1 &132692026
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 132692027}
+  - component: {fileID: 132692029}
+  - component: {fileID: 132692028}
+  m_Layer: 0
+  m_Name: Whale Event (Bonus 7)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &132692027
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 132692026}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1565561986}
+  m_Father: {fileID: 1158470329}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &132692028
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 132692026}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 180ecf9b41d478f468eb3e9083753217, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineImpulseSource
+  ImpulseDefinition:
+    ImpulseChannel: 1
+    ImpulseShape: 4
+    CustomImpulseShape:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    ImpulseDuration: 0.6
+    ImpulseType: 0
+    DissipationRate: 0.25
+    RawSignal: {fileID: 0}
+    AmplitudeGain: 1
+    FrequencyGain: 1
+    RepeatMode: 0
+    Randomize: 1
+    TimeEnvelope:
+      AttackShape:
+        serializedVersion: 2
+        m_Curve: []
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      DecayShape:
+        serializedVersion: 2
+        m_Curve: []
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      AttackTime: 0
+      SustainTime: 0.2
+      DecayTime: 0.7
+      ScaleWithImpact: 1
+      HoldForever: 0
+    ImpactRadius: 100
+    DirectionMode: 0
+    DissipationMode: 2
+    DissipationDistance: 100
+    PropagationSpeed: 343
+  DefaultVelocity: {x: 0.3, y: -0.5, z: 0}
+--- !u!114 &132692029
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 132692026}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 364782356ec364ae2b6670c15b7fd984, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.WhaleEvent
+  whale: {fileID: 1565561986}
+  waveSegmentPrefab: {fileID: 1796293416684313725, guid: 4ff007eb6014d45889c577ed78945725, type: 3}
+  bigSplashVfx: {fileID: 600972593626788181, guid: 3a499989278c14b77b3bf3b6f336c402, type: 3}
+  rumble: {fileID: 132692028}
+  firstWhaleAt: 55
+  interval: {x: 80, y: 110}
+  warningTime: 2.5
+  breachTime: 4.5
+  breachHeight: 28
+  waveRows: 3
+  rowSpacing: 14
+  laneWidth: 16
+  segmentWidth: 4
+  swell: 1.2
 --- !u!1 &136044368
 GameObject:
   m_ObjectHideFlags: 0
@@ -14880,6 +14993,67 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 258500153}
   m_Mesh: {fileID: 4300000, guid: 9d74d55f9305745508563821ddefb20b, type: 2}
+--- !u!1 &270809452
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 270809453}
+  - component: {fileID: 270809454}
+  m_Layer: 0
+  m_Name: Audio (Bonus 10)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &270809453
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 270809452}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1158470329}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &270809454
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 270809452}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 240996656cce8468d864cbdc783a07ab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.AudioManager
+  musicVolume: 0.55
+  ambienceVolume: 0.6
+  sfxVolume: 0.8
+  musicCalm: {fileID: 0}
+  musicIntense: {fileID: 0}
+  waves: {fileID: 0}
+  wind: {fileID: 0}
+  rain: {fileID: 0}
+  orbChime: {fileID: 0}
+  dash: {fileID: 0}
+  hit: {fileID: 0}
+  nearMiss: {fileID: 0}
+  starburst: {fileID: 0}
+  thunder: {fileID: 0}
+  whaleCall: {fileID: 0}
+  splash: {fileID: 0}
+  gameOver: {fileID: 0}
 --- !u!1 &272626538
 GameObject:
   m_ObjectHideFlags: 0
@@ -23431,6 +23605,59 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 430443397}
   m_Mesh: {fileID: 4300000, guid: 31379389153aa4610a76cef5ab8b2692, type: 2}
+--- !u!1 &432567620
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 432567621}
+  - component: {fileID: 432567622}
+  m_Layer: 0
+  m_Name: Hidden Orbs (Bonus 8)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &432567621
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 432567620}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1158470329}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &432567622
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 432567620}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1b0d1c2e21772468d9fb8d2a0a72d778, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.HiddenOrbs
+  orbPrefab: {fileID: 7249161118099210125, guid: beb6f0908f1e24ad18665ada3e1b597c, type: 3}
+  revealVfx: {fileID: 3593017577375301404, guid: 037727c1777b04eb58a954c9eba3e70e, type: 3}
+  spawnInterval: {x: 7, y: 13}
+  spawnZ: 112
+  laneX: {x: -6, y: 6}
+  lightValue: 0.2
+  bonusPoints: 100
+  beamHalfAngle: 9
+  beamReach: 260
 --- !u!1 &432905992
 GameObject:
   m_ObjectHideFlags: 0
@@ -25450,6 +25677,103 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 476086418}
   m_Mesh: {fileID: 4300000, guid: e8745e759c496413ba6758cd29fc29b6, type: 2}
+--- !u!1 &476776573
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 476776574}
+  - component: {fileID: 476776575}
+  m_Layer: 0
+  m_Name: Whale Glow Light
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &476776574
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 476776573}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1565561986}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!108 &476776575
+Light:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 476776573}
+  m_Enabled: 1
+  serializedVersion: 13
+  m_Type: 2
+  m_Color: {r: 0.4, g: 0.9, b: 1, a: 1}
+  m_Intensity: 4
+  m_Range: 22
+  m_SpotAngle: 30
+  m_InnerSpotAngle: 21.802082
+  m_CookieSize2D: {x: 0.5, y: 0.5}
+  m_Shadows:
+    m_Type: 0
+    m_Resolution: -1
+    m_CustomResolution: -1
+    m_Strength: 1
+    m_Bias: 0.05
+    m_NormalBias: 0.4
+    m_NearPlane: 0.2
+    m_CullingMatrixOverride:
+      e00: 1
+      e01: 0
+      e02: 0
+      e03: 0
+      e10: 0
+      e11: 1
+      e12: 0
+      e13: 0
+      e20: 0
+      e21: 0
+      e22: 1
+      e23: 0
+      e30: 0
+      e31: 0
+      e32: 0
+      e33: 1
+    m_UseCullingMatrixOverride: 0
+  m_Cookie: {fileID: 0}
+  m_DrawHalo: 0
+  m_Flare: {fileID: 0}
+  m_RenderMode: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingLayerMask: 1
+  m_Lightmapping: 4
+  m_LightShadowCasterMode: 0
+  m_AreaSize: {x: 1, y: 1}
+  m_BounceIntensity: 1
+  m_ColorTemperature: 6570
+  m_UseColorTemperature: 0
+  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_UseBoundingSphereOverride: 0
+  m_UseViewFrustumForShadowCasterCull: 1
+  m_ForceVisible: 0
+  m_ShapeRadius: 0.025
+  m_ShadowAngle: 0
+  m_LightUnit: 1
+  m_LuxAtDistance: 1
+  m_EnableSpotReflector: 1
 --- !u!1 &476824972
 GameObject:
   m_ObjectHideFlags: 0
@@ -32660,6 +32984,141 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 669556872}
   m_Mesh: {fileID: 4300000, guid: 7909420fbe917454e92abba9daf7f7ad, type: 2}
+--- !u!1 &672583752
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 672583753}
+  - component: {fileID: 672583754}
+  m_Layer: 0
+  m_Name: Living Village (Bonus 8)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &672583753
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 672583752}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1158470329}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &672583754
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 672583752}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 403a9c12954fe49c3b99e9b5ee252e71, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.LivingVillage
+  windows:
+  - {fileID: 39329590}
+  - {fileID: 1024423439}
+  - {fileID: 1345278316}
+  - {fileID: 710954194}
+  - {fileID: 1590350310}
+  - {fileID: 643935209}
+  - {fileID: 1374441581}
+  - {fileID: 657684220}
+  - {fileID: 950648940}
+  - {fileID: 348234956}
+  - {fileID: 764755589}
+  - {fileID: 70777417}
+  - {fileID: 278196648}
+  - {fileID: 1666133598}
+  - {fileID: 1300909878}
+  - {fileID: 242722495}
+  - {fileID: 2015756334}
+  - {fileID: 1012117218}
+  - {fileID: 1049121851}
+  - {fileID: 995861810}
+  - {fileID: 1785403426}
+  - {fileID: 1483855768}
+  - {fileID: 1648431056}
+  - {fileID: 350113688}
+  - {fileID: 2047089430}
+  - {fileID: 430443399}
+  - {fileID: 1526665675}
+  - {fileID: 881946560}
+  - {fileID: 40440569}
+  - {fileID: 1168455125}
+  - {fileID: 755584181}
+  - {fileID: 87656824}
+  - {fileID: 381929205}
+  - {fileID: 67211690}
+  - {fileID: 317237165}
+  - {fileID: 1741984890}
+  - {fileID: 428950897}
+  - {fileID: 1469337779}
+  - {fileID: 893568178}
+  - {fileID: 450200844}
+  - {fileID: 1763317862}
+  - {fileID: 1454186555}
+  - {fileID: 1688384694}
+  - {fileID: 116495736}
+  - {fileID: 542316754}
+  - {fileID: 1767324794}
+  - {fileID: 1939893957}
+  - {fileID: 1939165807}
+  - {fileID: 1545913370}
+  - {fileID: 812480900}
+  - {fileID: 125545162}
+  - {fileID: 276059592}
+  - {fileID: 1912815900}
+  - {fileID: 39159599}
+  - {fileID: 75845361}
+  - {fileID: 737873869}
+  - {fileID: 1194641982}
+  - {fileID: 734024359}
+  - {fileID: 1541095222}
+  - {fileID: 1075305795}
+  - {fileID: 1733638297}
+  - {fileID: 236036547}
+  - {fileID: 1818104724}
+  - {fileID: 374021302}
+  - {fileID: 1363619062}
+  - {fileID: 1006904853}
+  - {fileID: 34918927}
+  - {fileID: 1694039482}
+  - {fileID: 1136971753}
+  - {fileID: 462042329}
+  - {fileID: 995523713}
+  - {fileID: 169247423}
+  - {fileID: 940450249}
+  - {fileID: 64438964}
+  - {fileID: 712878393}
+  - {fileID: 1240212550}
+  - {fileID: 1334837261}
+  - {fileID: 572190073}
+  - {fileID: 993358105}
+  - {fileID: 1111871347}
+  - {fileID: 1046846351}
+  - {fileID: 1150335864}
+  - {fileID: 84415537}
+  - {fileID: 1179692597}
+  litMaterial: {fileID: 2100000, guid: 0d8aec1a897c44453b30fd1f71ba7e68, type: 2}
+  warmMaterial: {fileID: 2100000, guid: 18bc4a08a0b404d70bd9a38e73b81c38, type: 2}
+  offMaterial: {fileID: 2100000, guid: 5f5ab5987cd5c458e817b0dcdf4bf322, type: 2}
+  changeInterval: {x: 1.2, y: 3.5}
+  litFraction: {x: 0.8, y: 0.35}
+  sleepAfter: 240
 --- !u!1 &672659166
 GameObject:
   m_ObjectHideFlags: 0
@@ -56816,6 +57275,43 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1157388689}
   m_Mesh: {fileID: 4300000, guid: 0267cb4e44ac14d38b22319239443a27, type: 2}
+--- !u!1 &1158470328
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1158470329}
+  m_Layer: 0
+  m_Name: == STARLIT BONUS ==
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1158470329
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1158470328}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 132692027}
+  - {fileID: 672583753}
+  - {fileID: 432567621}
+  - {fileID: 2010568069}
+  - {fileID: 270809453}
+  - {fileID: 1426550517}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1166520075
 GameObject:
   m_ObjectHideFlags: 0
@@ -67829,6 +68325,81 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1420168699}
   m_Mesh: {fileID: 4300000, guid: e8745e759c496413ba6758cd29fc29b6, type: 2}
+--- !u!1 &1420565683
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1420565684}
+  - component: {fileID: 1420565685}
+  m_Layer: 0
+  m_Name: CM Photo Camera
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1420565684
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1420565683}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2010568069}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1420565685
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1420565683}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineCamera
+  Priority:
+    Enabled: 1
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
+  m_StreamingVersion: 20241001
+  m_LegacyPriority: 0
+  Target:
+    TrackingTarget: {fileID: 0}
+    LookAtTarget: {fileID: 0}
+    CustomLookAtTarget: 0
+  Lens:
+    FieldOfView: 45
+    OrthographicSize: 10
+    NearClipPlane: 0.1
+    FarClipPlane: 3000
+    Dutch: 0
+    ModeOverride: 0
+    PhysicalProperties:
+      GateFit: 2
+      SensorSize: {x: 21.946, y: 16.002}
+      LensShift: {x: 0, y: 0}
+      FocusDistance: 10
+      Iso: 200
+      ShutterSpeed: 0.005
+      Aperture: 16
+      BladeCount: 5
+      Curvature: {x: 2, y: 11}
+      BarrelClipping: 0.25
+      Anamorphism: 0
+  BlendHint: 0
 --- !u!1 &1421594539
 GameObject:
   m_ObjectHideFlags: 0
@@ -68149,6 +68720,66 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1425382592}
   m_Mesh: {fileID: 4300000, guid: 7909420fbe917454e92abba9daf7f7ad, type: 2}
+--- !u!1 &1426550516
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1426550517}
+  - component: {fileID: 1426550519}
+  - component: {fileID: 1426550518}
+  m_Layer: 0
+  m_Name: High Scores (Bonus 11)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1426550517
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1426550516}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1158470329}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1426550518
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1426550516}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f7880d9cdefe346c79ebb1093a0d8b36, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.LeaderboardClient
+  baseUrl: https://starlit-tides.vercel.app
+  timeoutSeconds: 8
+  gameVersion: 1.0
+--- !u!114 &1426550519
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1426550516}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c41c47d274b754ee8bdfaec59fd86d83, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.HighScoreManager
 --- !u!1 &1429337817
 GameObject:
   m_ObjectHideFlags: 0
@@ -77909,6 +78540,122 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1564615455}
   m_Mesh: {fileID: 4300000, guid: e8745e759c496413ba6758cd29fc29b6, type: 2}
+--- !u!1 &1565561985
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1565561986}
+  - component: {fileID: 1565561989}
+  - component: {fileID: 1565561988}
+  - component: {fileID: 1565561987}
+  m_Layer: 0
+  m_Name: Glowing Whale
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &1565561986
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565561985}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1.5, y: 1.5, z: 1.5}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 476776574}
+  m_Father: {fileID: 132692027}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1565561987
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565561985}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 75572a10d395c4e298c0ddf799fbe491, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.WaterDisturber
+  radius: 7
+  strength: 1.6
+  pulse: 0
+  pulseSpeed: 2
+  maxHeightAboveWater: 8
+  leaveTrail: 0
+  trailSpacing: 0.8
+  trailRadius: 1.2
+  trailStrength: 0.8
+  trailLife: 1.8
+  minTrailInterval: 0.07
+  strengthMultiplier: 1
+--- !u!23 &1565561988
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565561985}
+  m_Enabled: 1
+  m_CastShadows: 0
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: eea794b86976244078ceceec7c62c5fb, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &1565561989
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565561985}
+  m_Mesh: {fileID: 4300000, guid: f1cd45fe0b29b421c85de5b7c74c213e, type: 2}
 --- !u!1 &1565947147
 GameObject:
   m_ObjectHideFlags: 0
@@ -93175,6 +93922,7 @@ MonoBehaviour:
   oceanMaterial: {fileID: 2100000, guid: b1a08876a7fd44c20946428e67f02ab1, type: 2}
   tideSpeed: 4
   waveScale: 1
+  swell: 0
   seaGlowBoost: 0
   seaGlowColor: {r: 1.6, g: 1.3, b: 0.5, a: 1}
   nightGlow: 1
@@ -101111,6 +101859,77 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2007044583}
   m_Mesh: {fileID: 4300000, guid: 2eff051abf08141828b5bd01b4d9a812, type: 2}
+--- !u!1 &2010568068
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2010568069}
+  - component: {fileID: 2010568071}
+  - component: {fileID: 2010568070}
+  m_Layer: 0
+  m_Name: Photo Mode (Bonus 9)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2010568069
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2010568068}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1420565684}
+  m_Father: {fileID: 1158470329}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2010568070
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2010568068}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 20
+  blendDistance: 0
+  weight: 0
+  sharedProfile: {fileID: 11400000, guid: a1741ed20270a48979e3a1e367137173, type: 2}
+--- !u!114 &2010568071
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2010568068}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2915121d315804b8281cb0b1d9985de2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.PhotoMode
+  photoCamera: {fileID: 1420565685}
+  photoVolume: {fileID: 2010568070}
+  hideWhileActive:
+  - {fileID: 1770815251}
+  orbitSpeed: 70
+  zoomSpeed: 10
+  distanceRange: {x: 3, y: 60}
+  pitchRange: {x: -5, y: 80}
 --- !u!1 &2012093657
 GameObject:
   m_ObjectHideFlags: 0
@@ -110036,3 +110855,4 @@ SceneRoots:
   - {fileID: 1559654464}
   - {fileID: 376439533}
   - {fileID: 432905993}
+  - {fileID: 1158470329}

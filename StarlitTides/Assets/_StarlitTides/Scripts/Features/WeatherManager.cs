@@ -19,6 +19,8 @@ namespace StarlitTides
         public static WeatherManager Instance { get; private set; }
 
         public static event Action<Weather> OnWeatherChanged;
+        // Sends the flash strength (the AudioManager plays thunder a moment later).
+        public static event Action<float> OnLightning;
 
         [Header("Score needed for each weather")]
         public int stormAtScore = 3000;
@@ -158,8 +160,9 @@ namespace StarlitTides
             if (lightningTimer > 0f) return;
             lightningTimer = UnityEngine.Random.Range(lightningInterval.x, lightningInterval.y);
 
-            if (SkyController.Instance != null)
-                SkyController.Instance.TriggerLightning(UnityEngine.Random.Range(0.6f, 1f));
+            float strength = UnityEngine.Random.Range(0.6f, 1f);
+            if (SkyController.Instance != null) SkyController.Instance.TriggerLightning(strength);
+            if (OnLightning != null) OnLightning(strength);
         }
 
         // Re-render the sea's reflections once the new weather has fully blended in.
