@@ -384,6 +384,18 @@ namespace StarlitTides
             return Normalize(d, 0.8f);
         }
 
+        // UI click: a tiny soft "tick" for menu buttons.
+        public static float[] UiClick()
+        {
+            float[] d = Buffer(0.12f);
+            for (int i = 0; i < d.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                d[i] = (float)Math.Sin(TwoPi * 1500f * t) * (float)Math.Exp(-t * 60f) + (float)Math.Sin(TwoPi * 3000f * t) * 0.3f * (float)Math.Exp(-t * 90f);
+            }
+            return Normalize(d, 0.5f);
+        }
+
         // Game over: a slow falling minor chord.
         public static float[] GameOverTone()
         {

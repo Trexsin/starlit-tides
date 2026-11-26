@@ -42,6 +42,7 @@ namespace StarlitTides
         public AudioClip whaleCall;
         public AudioClip splash;
         public AudioClip gameOver;
+        public AudioClip uiClick;
 
         // Semitone steps of a pentatonic scale: the orb chime climbs these as the combo grows.
         static readonly int[] ComboScale = { 0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24 };
@@ -55,7 +56,7 @@ namespace StarlitTides
         // Generated sample data, filled in on a background thread.
         class Generated
         {
-            public float[] calm, intense, waves, wind, rain, orb, dash, hit, nearMiss, starburst, thunder, whale, splash, gameOver;
+            public float[] calm, intense, waves, wind, rain, orb, dash, hit, nearMiss, starburst, thunder, whale, splash, gameOver, click;
         }
         Task<Generated> generating;
 
@@ -108,6 +109,7 @@ namespace StarlitTides
             g.whale = ProceduralAudio.WhaleCall();
             g.splash = ProceduralAudio.Splash(19);
             g.gameOver = ProceduralAudio.GameOverTone();
+            g.click = ProceduralAudio.UiClick();
             return g;
         }
 
@@ -136,6 +138,7 @@ namespace StarlitTides
             if (whaleCall == null) whaleCall = ToClip("Whale Call", g.whale);
             if (splash == null) splash = ToClip("Splash", g.splash);
             if (gameOver == null) gameOver = ToClip("Game Over", g.gameOver);
+            if (uiClick == null) uiClick = ToClip("UI Click", g.click);
 
             calmSource.clip = musicCalm;
             intenseSource.clip = musicIntense;
@@ -230,6 +233,9 @@ namespace StarlitTides
             int step = ComboScale[Mathf.Clamp(combo, 0, ComboScale.Length - 1)];
             PlaySfx(orbChime, 0.6f, Mathf.Pow(2f, step / 12f));
         }
+
+        // Menu buttons call this.
+        public void PlayClick() { PlaySfx(uiClick, 0.5f, Random.Range(0.97f, 1.03f)); }
 
         void HandleDash() { PlaySfx(dash, 0.5f, Random.Range(0.95f, 1.05f)); }
         void HandleHit(Obstacle obstacle) { PlaySfx(hit, 1f, Random.Range(0.9f, 1.05f)); }

@@ -115,6 +115,8 @@ Shader "StarlitTides/Ocean"
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma multi_compile_fog
             #pragma multi_compile_instancing
+            // Low quality setting: cheaper ripples, no lantern reflections (set by SettingsManager).
+            #pragma multi_compile _ STARLIT_QUALITY_LOW
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -246,6 +248,14 @@ Shader "StarlitTides/Ocean"
                 float e = 0.15;
                 float2 o1 = float2(t * 0.6, t * 0.35);
                 float2 o2 = float2(-t * 0.4, t * 0.55);
+            #if defined(STARLIT_QUALITY_LOW)
+                // Low quality: one 2-octave noise instead of two (about 3x cheaper).
+                float hl  = SN_Fbm2(p + o1, 2);
+                float hlx = SN_Fbm2(p + float2(e, 0) + o1, 2);
+                float hlz = SN_Fbm2(p + float2(0, e) + o1, 2);
+                float2 slopeLow = float2(hlx - hl, hlz - hl) / e * _RippleStrength * distanceFade;
+                return normalize(float3(-slopeLow.x, 1, -slopeLow.y));
+            #endif
                 float h  = SN_Fbm2(p + o1, 3) + SN_Fbm2(p * 1.7 + o2, 2) * 0.5;
                 float hx = SN_Fbm2(p + float2(e, 0) + o1, 3) + SN_Fbm2((p + float2(e, 0)) * 1.7 + o2, 2) * 0.5;
                 float hz = SN_Fbm2(p + float2(0, e) + o1, 3) + SN_Fbm2((p + float2(0, e)) * 1.7 + o2, 2) * 0.5;
@@ -344,7 +354,7 @@ Shader "StarlitTides/Ocean"
                 color += (glint + moonPath) * mainLight.color;
 
                 // ---- lantern / window lights reflected on the water ----
-                #if defined(_ADDITIONAL_LIGHTS)
+                #if defined(_ADDITIONAL_LIGHTS) && !defined(STARLIT_QUALITY_LOW)
                 {
                     InputData inputData = (InputData)0;
                     inputData.positionWS = posWS;
