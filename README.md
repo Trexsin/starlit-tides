@@ -12,7 +12,7 @@ Steer a small glowing paper boat across a dark night sea beside a sleeping coast
 - **Procedural night sky**: twinkling stars, Milky Way, moon, animated aurora, storm clouds with lightning, sunset
 - **One-click world builder**: village with glowing windows, lantern-lit square, market stalls, pier, arched bridge over a lagoon, lighthouse with sweeping volumetric beams, forest, grassland and layered mountains
 - **Core gameplay**: light meter, pooled orbs and obstacles, Cinemachine camera with impulse shake, hit-stop, difficulty ramp
-- **Global leaderboard** on Vercel + Neon Postgres
+- **Global leaderboard** on Vercel + Neon Postgres: live at <https://starlit-tides.vercel.app/api/scores>
 
 ## Repository layout
 

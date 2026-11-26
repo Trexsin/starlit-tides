@@ -1,5 +1,7 @@
 # Starlit Tides: Leaderboard API
 
+**Live:** <https://starlit-tides.vercel.app/api/scores> · health check: <https://starlit-tides.vercel.app/api/health>
+
 A tiny global leaderboard running as **Vercel serverless functions** with a **Neon Postgres** database.
 
 ```
@@ -41,15 +43,15 @@ After this, every `git push` to the main branch redeploys automatically.
 ## Try it
 
 ```bash
-curl https://YOUR-PROJECT.vercel.app/api/health
+curl https://starlit-tides.vercel.app/api/health
 ```
 
 ```bash
-curl -X POST https://YOUR-PROJECT.vercel.app/api/scores -H "Content-Type: application/json" -d '{"name":"Tester","score":1200,"orbs":12,"distance":500,"duration":60,"version":"1.0"}'
+curl -X POST https://starlit-tides.vercel.app/api/scores -H "Content-Type: application/json" -d '{"name":"Tester","score":1200,"orbs":12,"distance":500,"duration":60,"version":"1.0"}'
 ```
 
 ```bash
-curl "https://YOUR-PROJECT.vercel.app/api/scores?limit=10"
+curl "https://starlit-tides.vercel.app/api/scores?limit=10"
 ```
 
 ## Local development

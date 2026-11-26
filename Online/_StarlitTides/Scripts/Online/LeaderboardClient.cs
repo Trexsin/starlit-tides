@@ -27,7 +27,7 @@ namespace StarlitTides
         public static LeaderboardClient Instance { get; private set; }
 
         [Tooltip("Your Vercel deployment, e.g. https://starlit-tides.vercel.app (no trailing slash).")]
-        public string baseUrl = "https://YOUR-PROJECT.vercel.app";
+        public string baseUrl = "https://starlit-tides.vercel.app";
         public int timeoutSeconds = 8;
         public string gameVersion = "1.0";
 
