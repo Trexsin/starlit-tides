@@ -148,6 +148,7 @@ Shader "StarlitTides/Ocean"
             float  _WaveScale;        // weather: 1 = calm night, ~1.8 = storm
             float  _SeaGlowBoost;     // Starburst power-up: 0..1
             float4 _SeaGlowColor;     // Starburst tint (HDR)
+            float  _SeaNightGlow;     // 0 = no plankton glow (daytime in the intro), 1 = full
             float4 _DisturbPoints[32];// xy = world XZ, z = radius, w = strength
             int    _DisturbCount;
 
@@ -380,10 +381,12 @@ Shader "StarlitTides/Ocean"
                            + shoreFoam * _BioShore * plankton
                            + SoftLimit(DisturbanceGlow(posWS)) * _BioDisturb * (0.7 + 0.6 * foamNoise)
                            + sparkle * _SparkleIntensity;
-                float3 bioLight = glow * _BioColor.rgb;
+                float3 bioLight = glow * _BioColor.rgb * _SeaNightGlow;
 
-                // Starburst power-up: the whole sea lights up
-                float boost = _SeaGlowBoost * (0.5 + plankton + sparkle * 2.0 + crest);
+                // Starburst power-up: the plankton glows brighter and golden light
+                // shimmers across the whole sea (sparkles and wave crests the most).
+                bioLight *= 1.0 + _SeaGlowBoost * 0.4;
+                float boost = _SeaGlowBoost * (0.07 + 0.3 * bloomPatch + sparkle * 2.5 + crest * 0.7);
                 bioLight += boost * _SeaGlowColor.rgb;
 
                 color += bioLight;

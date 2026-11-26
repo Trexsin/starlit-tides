@@ -46,8 +46,6 @@ namespace StarlitTides
         public bool IsPlaying { get { return State == GameState.Playing; } }
         public bool InGracePeriod { get { return IsPlaying && RunTime < gracePeriod; } }
 
-        float timeScaleBeforePause = 1f;
-
         void Awake()
         {
             Instance = this;
@@ -117,7 +115,6 @@ namespace StarlitTides
         public void Pause()
         {
             if (State != GameState.Playing) return;
-            timeScaleBeforePause = Time.timeScale;
             Time.timeScale = 0f;
             SetState(GameState.Paused);
         }
@@ -125,7 +122,9 @@ namespace StarlitTides
         public void Resume()
         {
             if (State != GameState.Paused) return;
-            Time.timeScale = timeScaleBeforePause > 0f ? timeScaleBeforePause : 1f;
+            // Always back to normal speed. (Slow motion and hit-stop are short, and
+            // they stop themselves when the game is paused.)
+            Time.timeScale = 1f;
             SetState(GameState.Playing);
         }
 

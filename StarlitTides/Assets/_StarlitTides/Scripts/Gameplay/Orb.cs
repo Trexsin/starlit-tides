@@ -47,7 +47,8 @@ namespace StarlitTides
             visual.localScale = baseScale * pulse;
         }
 
-        public void Collect(BoatController boat)
+        // "virtual" so special pickups (like the golden star) can do something else.
+        public virtual void Collect(BoatController boat)
         {
             if (collected) return;
             collected = true;

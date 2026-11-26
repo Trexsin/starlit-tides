@@ -6,6 +6,7 @@
 //   Pause   = Esc, gamepad Start
 //   Restart = R, gamepad Y / Triangle
 //   Photo   = P, gamepad Select (used later for Photo Mode)
+//   Skip    = Space, Enter or Esc, gamepad A or Start (skips the intro)
 // Other scripts just read StarlitInput.Instance.Move, .DashPressed and so on.
 
 using UnityEngine;
@@ -27,6 +28,7 @@ namespace StarlitTides
         InputAction pauseAction;
         InputAction restartAction;
         InputAction photoAction;
+        InputAction skipAction;
 
         // Steering direction. x = left/right, y = forward/back. Length is at most 1.
         public Vector2 Move
@@ -42,6 +44,7 @@ namespace StarlitTides
         public bool PausePressed { get { return pauseAction.WasPressedThisFrame(); } }
         public bool RestartPressed { get { return restartAction.WasPressedThisFrame(); } }
         public bool PhotoModePressed { get { return photoAction.WasPressedThisFrame(); } }
+        public bool SkipPressed { get { return skipAction.WasPressedThisFrame(); } }
 
         void Awake()
         {
@@ -78,6 +81,12 @@ namespace StarlitTides
 
             photoAction = new InputAction("PhotoMode", InputActionType.Button, "<Keyboard>/p");
             photoAction.AddBinding("<Gamepad>/select");
+
+            skipAction = new InputAction("Skip", InputActionType.Button, "<Keyboard>/space");
+            skipAction.AddBinding("<Keyboard>/enter");
+            skipAction.AddBinding("<Keyboard>/escape");
+            skipAction.AddBinding("<Gamepad>/buttonSouth");
+            skipAction.AddBinding("<Gamepad>/start");
         }
 
         void OnEnable()
@@ -88,6 +97,7 @@ namespace StarlitTides
             pauseAction.Enable();
             restartAction.Enable();
             photoAction.Enable();
+            skipAction.Enable();
         }
 
         void OnDisable()
@@ -98,6 +108,7 @@ namespace StarlitTides
             pauseAction.Disable();
             restartAction.Disable();
             photoAction.Disable();
+            skipAction.Disable();
         }
 
         void OnDestroy()
@@ -109,6 +120,7 @@ namespace StarlitTides
                 pauseAction.Dispose();
                 restartAction.Dispose();
                 photoAction.Dispose();
+                skipAction.Dispose();
             }
             if (Instance == this) Instance = null;
         }

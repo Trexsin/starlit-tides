@@ -36,7 +36,9 @@ namespace StarlitTides
         [Range(0f, 3f)] public float waveScale = 1f;
         [Tooltip("Starburst: 0 = off, 1 = the whole sea glows.")]
         [Range(0f, 1f)] public float seaGlowBoost = 0f;
-        [ColorUsage(false, true)] public Color seaGlowColor = new Color(1.6f, 1.3f, 0.5f);
+        [ColorUsage(false, true)] public Color seaGlowColor = new Color(1.1f, 0.6f, 0.12f);
+        [Tooltip("Overall plankton glow. The intro animates it 0 -> 1 as night falls.")]
+        [Range(0f, 1f)] public float nightGlow = 1f;
 
         [Header("Ripples")]
         [Tooltip("How long a ripple glows, in seconds.")]
@@ -172,6 +174,7 @@ namespace StarlitTides
             Shader.SetGlobalFloat("_WaveScale", waveScale);
             Shader.SetGlobalFloat("_SeaGlowBoost", seaGlowBoost);
             Shader.SetGlobalColor("_SeaGlowColor", seaGlowColor);
+            Shader.SetGlobalFloat("_SeaNightGlow", nightGlow);
             Shader.SetGlobalVectorArray("_DisturbPoints", glowPoints);
             Shader.SetGlobalInt("_DisturbCount", count);
         }
