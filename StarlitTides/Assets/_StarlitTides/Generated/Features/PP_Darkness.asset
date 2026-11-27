@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: PP_Darkness
   m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.VolumeProfile
   components:
-  - {fileID: 4366326823429096525}
-  - {fileID: 1114828731395712341}
---- !u!114 &1114828731395712341
+  - {fileID: 6854690113744364855}
+  - {fileID: 1863039554388152370}
+--- !u!114 &1863039554388152370
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}
@@ -43,7 +43,7 @@ MonoBehaviour:
   saturation:
     m_OverrideState: 1
     m_Value: -35
---- !u!114 &4366326823429096525
+--- !u!114 &6854690113744364855
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}

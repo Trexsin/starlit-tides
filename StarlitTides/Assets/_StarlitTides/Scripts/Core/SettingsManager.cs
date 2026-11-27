@@ -5,6 +5,7 @@
 //   fullscreen, FPS counter, and whether the intro cinematic plays.
 // Quality also changes a few scene settings that URP's quality levels can't
 // (grass distance, reflection detail, rain amount, ocean shader detail).
+// Screen mode and render resolution live in DisplayManager (same object).
 
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -25,10 +26,14 @@ namespace StarlitTides
         public bool PlayIntro { get; private set; }
 
         public string QualityName { get { return QualitySettings.names[QualityLevel]; } }
+        /// <summary>The sharpening strength for the quality level; DisplayManager adds more when upscaling.</summary>
+        public float BaseSharpness { get; private set; }
 
         void Awake()
         {
             Instance = this;
+            // Resolution / screen mode (added after the UI was built, so add it if missing).
+            if (GetComponent<DisplayManager>() == null) gameObject.AddComponent<DisplayManager>();
             MasterVolume = PlayerPrefs.GetFloat("ST_MasterVolume", 0.9f);
             MusicVolume = PlayerPrefs.GetFloat("ST_MusicVolume", 0.55f);
             SfxVolume = PlayerPrefs.GetFloat("ST_SfxVolume", 0.8f);
@@ -59,7 +64,7 @@ namespace StarlitTides
             AudioListener.volume = MasterVolume;
             ApplyAudio();
             ApplyQuality();
-            if (!Application.isEditor) Screen.fullScreen = Fullscreen;
+            // (Fullscreen and the native size are applied by DisplayManager.Start.)
         }
 
         void ApplyAudio()
@@ -104,7 +109,10 @@ namespace StarlitTides
         {
             Fullscreen = value;
             PlayerPrefs.SetInt("ST_Fullscreen", value ? 1 : 0);
-            Screen.fullScreen = value;
+            // Fullscreen at the display's native size, or a 75% window (not Unity's
+            // last saved size, which could be tiny or stretched).
+            if (DisplayManager.Instance != null) DisplayManager.Instance.SetFullscreen(value);
+            else Screen.fullScreen = value;
         }
 
         public void SetShowFps(bool value)
@@ -157,8 +165,12 @@ namespace StarlitTides
             }
 
             // Contrast-adaptive sharpening after post-processing (StarlitSharpen.shader).
-            // Low renders at 85% resolution, so it gets the strongest pass.
-            Shader.SetGlobalFloat("_StarlitSharpness", Mathf.Lerp(0.7f, 0.45f, q));
+            // Low gets the strongest pass. DisplayManager adds more when the 3D is
+            // rendered below the screen's resolution, and sets URP's render scale on
+            // this level's asset (each quality level has its own URP asset).
+            BaseSharpness = Mathf.Lerp(0.7f, 0.45f, q);
+            if (DisplayManager.Instance != null) DisplayManager.Instance.ApplyRenderScale();
+            else Shader.SetGlobalFloat("_StarlitSharpness", BaseSharpness);
 
             // STARLIT_QUALITY_LOW (Low only) switches off, in the shaders: ocean ripple
             // detail, lantern reflections, the boat's glowing wake and the star glints

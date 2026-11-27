@@ -16,6 +16,7 @@ Phase 8 answers that in six steps (plus a seventh, VFX polish, from later feedba
 | 6 | [Performance](Phase8_Step6_Performance.md) | Per-tier features, feature-by-feature timing, wake and ripple optimisations |
 | 7 | [VFX polish](Phase8_Step7_VFX.md) | A new particle shader (white-hot cores, soft particles), a procedural texture set, and every effect rebuilt in layers: shockwaves on the waves, light trails, mist, coral hit sparks, rain ripples, stardust |
 | 8 | [Fixes, scale, camera](Phase8_Step8_Fixes_Scale_Camera.md) | Fixed glow halos drawn as white squares after an in-editor rebuild (synchronous texture imports + an asset check), life-size large creatures, a lower and closer camera |
+| 9 | [Resolution](Phase8_Step9_Resolution.md) | Native-size fullscreen (it was stuck at a stretched 1280 × 720), a Resolution setting (3D render scale with FSR upscaling, sharp UI), and a first-launch auto-detect that measures the frame rate and picks the best resolution and quality for the device |
 
 To apply it all: open the project and run **Starlit Tides → Rebuild Everything** (steps 4–8, 10 and **11. Build Sea Field**).
 

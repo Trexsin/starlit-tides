@@ -542,28 +542,38 @@ namespace StarlitTides.EditorTools
             CanvasGroup screen = Screen("Settings", canvas);
             Transform t = screen.transform;
             Dim(t, 0.4f);
-            Panel("Panel", t, new Vector2(980, 860));
+            Panel("Panel", t, new Vector2(980, 900));
             Vector2 c = new Vector2(0.5f, 0.5f);
-            Label("Title", t, "SETTINGS", titleFont, 60, Gold, TextAlignmentOptions.Center, c, new Vector2(0, 350), new Vector2(800, 80)).fontSharedMaterial = titleGlow;
+            Label("Title", t, "SETTINGS", titleFont, 60, Gold, TextAlignmentOptions.Center, c, new Vector2(0, 370), new Vector2(800, 80)).fontSharedMaterial = titleGlow;
 
             SettingsView view = t.gameObject.AddComponent<SettingsView>();
             ui.settingsView = view;
-            view.masterSlider = MakeSlider("Master volume", t, 240);
-            view.musicSlider = MakeSlider("Music", t, 170);
-            view.sfxSlider = MakeSlider("Effects", t, 100);
+            view.masterSlider = MakeSlider("Master volume", t, 280);
+            view.musicSlider = MakeSlider("Music", t, 215);
+            view.sfxSlider = MakeSlider("Effects", t, 150);
 
-            Label("Quality Label", t, "Graphics quality", bodyFont, 30, TextColor, TextAlignmentOptions.Left, c, new Vector2(-220, 20), new Vector2(300, 50));
-            view.qualityLeft = MakeButton("<", t, c, new Vector2(0, 20), new Vector2(60, 50), null, 30);
-            view.qualityText = Label("Quality", t, "HIGH", titleFont, 30, Gold, TextAlignmentOptions.Center, c, new Vector2(150, 20), new Vector2(220, 50));
-            view.qualityRight = MakeButton(">", t, c, new Vector2(300, 20), new Vector2(60, 50), null, 30);
+            Label("Quality Label", t, "Graphics quality", bodyFont, 30, TextColor, TextAlignmentOptions.Left, c, new Vector2(-220, 80), new Vector2(300, 50));
+            view.qualityLeft = MakeButton("<", t, c, new Vector2(0, 80), new Vector2(60, 50), null, 30);
+            view.qualityText = Label("Quality", t, "HIGH", titleFont, 30, Gold, TextAlignmentOptions.Center, c, new Vector2(150, 80), new Vector2(220, 50));
+            view.qualityRight = MakeButton(">", t, c, new Vector2(300, 80), new Vector2(60, 50), null, 30);
 
-            view.fullscreenToggle = MakeToggle("Fullscreen", t, -60);
-            view.fpsToggle = MakeToggle("Show FPS counter", t, -120);
-            view.introToggle = MakeToggle("Play the intro cinematic", t, -180);
+            // Resolution: the size the 3D world is rendered at (DisplayManager). The
+            // screen itself always runs at its native size, so the UI stays sharp.
+            Label("Resolution Label", t, "Resolution", bodyFont, 30, TextColor, TextAlignmentOptions.Left, c, new Vector2(-220, 12), new Vector2(300, 50));
+            view.resolutionLeft = MakeButton("<", t, c, new Vector2(0, 12), new Vector2(60, 50), null, 30);
+            view.resolutionText = Label("Resolution", t, "1920 x 1080", titleFont, 26, Gold, TextAlignmentOptions.Center, c, new Vector2(150, 12), new Vector2(230, 50));
+            view.resolutionText.textWrappingMode = TextWrappingModes.NoWrap;
+            view.resolutionRight = MakeButton(">", t, c, new Vector2(300, 12), new Vector2(60, 50), null, 30);
+            view.resolutionDetail = Label("Resolution Detail", t, "", bodyFont, 20, Muted, TextAlignmentOptions.Center, c, new Vector2(0, -32), new Vector2(860, 32));
 
-            Label("Hint", t, "Keyboard: WASD / arrows, Space dash, Esc pause, P photo mode   •   Gamepad supported",
-                  bodyFont, 20, Muted, TextAlignmentOptions.Center, c, new Vector2(0, -255), new Vector2(900, 40));
-            ui.settingsFirst = MakeButton("BACK", t, c, new Vector2(0, -345), new Vector2(320, 64), ui.CloseSettings);
+            view.fullscreenToggle = MakeToggle("Fullscreen", t, -85);
+            view.fpsToggle = MakeToggle("Show FPS counter", t, -140);
+            view.introToggle = MakeToggle("Play the intro cinematic", t, -195);
+            view.autoDetectButton = MakeButton("AUTO-DETECT BEST SETTINGS", t, c, new Vector2(0, -262), new Vector2(520, 54), null, 24);
+
+            Label("Hint", t, "Keyboard: WASD / arrows, Space dash, Esc pause, P photo mode   \u2022   Gamepad supported",
+                  bodyFont, 20, Muted, TextAlignmentOptions.Center, c, new Vector2(0, -318), new Vector2(900, 40));
+            ui.settingsFirst = MakeButton("BACK", t, c, new Vector2(0, -375), new Vector2(320, 60), ui.CloseSettings);
             return screen;
         }
 
@@ -732,6 +742,8 @@ namespace StarlitTides.EditorTools
                 a.supportsHDR = true;                    // bloom needs HDR
                 // Sharpness first: native resolution on Medium/High, and Low upscales
                 // with FSR (which sharpens) instead of plain bilinear blur.
+                // (In the game DisplayManager overrides the render scale with the
+                // player's Resolution setting; these are the editor defaults.)
                 a.renderScale = i == 0 ? 0.85f : 1f;
                 a.upscalingFilter = i == 0 ? UpscalingFilterSelection.FSR : UpscalingFilterSelection.Auto;
                 a.fsrOverrideSharpness = true;

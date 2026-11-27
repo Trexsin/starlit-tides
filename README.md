@@ -46,7 +46,7 @@ Steer a small glowing paper boat out across a dark night sea, away from a sleepi
 
 **Finished game**
 - Main menu with a living 3D background, HUD with a radial light meter, How to Play, Settings, Pause and Game Over screens with fades
-- Saved settings (volumes, fullscreen, FPS counter, intro on/off) and **Low / Medium / High** quality presets. Low skips outlines, the wake, star glints and ocean detail; god rays are High only; the scenery density follows the preset
+- Saved settings (volumes, fullscreen, resolution, FPS counter, intro on/off) and **Low / Medium / High** quality presets. On the first launch the game measures the device and picks the best resolution and quality (Settings → **Auto-detect** runs it again); resolution is the 3D render scale with FSR upscaling, so menus stay sharp. Low skips outlines, the wake, star glints and ocean detail; god rays are High only; the scenery density follows the preset
 - **Global leaderboard** on Vercel + Neon Postgres: live at <https://starlit-tides.vercel.app/api/scores>
 
 ## Getting started
