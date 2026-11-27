@@ -45,6 +45,8 @@ namespace StarlitTides
 
             if (glowRenderer != null)
             {
+                // (null after a script reload during Play mode, when Awake doesn't run again)
+                if (propertyBlock == null) propertyBlock = new MaterialPropertyBlock();
                 glowRenderer.GetPropertyBlock(propertyBlock);
                 propertyBlock.SetColor(EmissionColorId, glowColor * brightness);
                 glowRenderer.SetPropertyBlock(propertyBlock);

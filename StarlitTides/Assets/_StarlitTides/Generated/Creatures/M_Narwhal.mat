@@ -30,24 +30,24 @@ Material:
     - _BellyLow: 0
     - _EdgeGlow: 0
     - _FinLag: 0.8
-    - _FinLift: 0.5
+    - _FinLift: 0.08
     - _FinSpeed: 2.4
-    - _FinSweep: 0.1
-    - _Gloss: 96
+    - _FinSweep: 0.03
+    - _Gloss: 180
     - _IridScale: 1.4
-    - _Iridescence: 0.5
+    - _Iridescence: 0.8
     - _PulseSpeed: 1.6
     - _RimPower: 3
     - _SeamScale: 5
     - _SeamStrength: 0
     - _SpecStrength: 1.2
-    - _SpotDensity: 0.45
-    - _SpotStrength: 1
-    - _StripeStrength: 0
-    - _StripeWidth: 0.035
-    - _SwimAmount: 0.1
-    - _SwimFreq: 2
-    - _SwimSpeed: 6
+    - _SpotDensity: 0.5
+    - _SpotStrength: 1.4
+    - _StripeStrength: 2.4
+    - _StripeWidth: 0.06
+    - _SwimAmount: 0.22
+    - _SwimFreq: 1.2
+    - _SwimSpeed: 5.5
     - _Toon: 0.6
     - _ToonSteps: 3
     - _Wrap: 0.5
@@ -56,7 +56,7 @@ Material:
     - _BellyColor: {r: 0.88, g: 0.9, b: 0.95, a: 1}
     - _GlowColor: {r: 3.4, g: 2.3, b: 0.6, a: 1}
     - _RimColor: {r: 0.4, g: 1.4, b: 2.4, a: 1}
-    - _SpotScale: {r: 10, g: 14, b: 0, a: 0}
-    - _SwimAxis: {r: 1, g: 0, b: 0, a: 0}
+    - _SpotScale: {r: 24, g: 34, b: 0, a: 0}
+    - _SwimAxis: {r: 0, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

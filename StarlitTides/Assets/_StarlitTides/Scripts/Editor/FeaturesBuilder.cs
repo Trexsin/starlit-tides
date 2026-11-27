@@ -439,6 +439,7 @@ namespace StarlitTides.EditorTools
                 cam.Lens = lens;
                 CameraDrift drift = camObject.AddComponent<CameraDrift>();
                 drift.velocity = shot.drift;
+                drift.startTime = (float)shot.start;   // drift from this shot's own start, not the intro's
 
                 TimelineClip clip = cameraTrack.CreateClip<CinemachineShot>();
                 clip.displayName = shot.name;

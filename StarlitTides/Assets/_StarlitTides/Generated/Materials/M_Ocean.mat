@@ -64,16 +64,16 @@ Material:
     - _WaveFadeStart: 180
     m_Colors:
     - _Absorption: {r: 0.45, g: 0.12, b: 0.08, a: 0}
-    - _BioColor: {r: 0.15, g: 2.6, b: 3.2, a: 1}
-    - _BioColor2: {r: 2.2, g: 0.35, b: 3, a: 1}
+    - _BioColor: {r: 0.12, g: 2.5, b: 3.2, a: 1}
+    - _BioColor2: {r: 1.1, g: 0.5, b: 3, a: 1}
     - _CalmZone: {r: -143.46875, g: 22.5298, b: 31, a: 31}
-    - _DeepColor: {r: 0.008, g: 0.02, b: 0.06999998, a: 1}
+    - _DeepColor: {r: 0.006, g: 0.018, b: 0.07, a: 1}
     - _FoamColor: {r: 0.45, g: 0.85, b: 1, a: 1}
-    - _HorizonColor: {r: 0.06999998, g: 0.07999996, b: 0.19999996, a: 1}
+    - _HorizonColor: {r: 0.07, g: 0.08, b: 0.2, a: 1}
     - _NearColor: {r: 0.035, g: 0.33999997, b: 0.41999996, a: 1}
     - _ReflectionTint: {r: 0.45999992, g: 0.56, b: 0.72, a: 1}
-    - _ShallowColor: {r: 0.059999965, g: 0.41999996, b: 0.47999996, a: 1}
-    - _SparkleColor3: {r: 3.4, g: 2.2, b: 0.5, a: 1}
+    - _ShallowColor: {r: 0.03, g: 0.32, b: 0.42, a: 1}
+    - _SparkleColor3: {r: 3, g: 2.1, b: 0.6, a: 1}
     - _TrailColor: {r: 0.25, g: 2.3, b: 2.6, a: 1}
     - _WaveA: {r: 0.3, g: -1, b: 0.16, a: 24}
     - _WaveB: {r: -0.71, g: -0.69, b: 0.12, a: 13.7}

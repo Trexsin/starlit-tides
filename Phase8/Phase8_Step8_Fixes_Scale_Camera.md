@@ -17,6 +17,16 @@ The orbs, buoys and the boat's candle each have a soft glow halo. After the last
 - `Persist` writes a glow/VFX material to disk the moment its texture is set.
 - **Rebuild Everything now ends with an asset check** that reports any glow/VFX material without a sprite, and a missing LUT. The first fixed run caught two more materials; the final run inside the open editor reports *"all generated materials have their textures."*
 
+### Follow-up: the intro ended underwater ("can't see the boat or any objects")
+
+The intro's last shot, *"The sea awakens"*, played with the camera **at wave level, 30–40 m in front of the boat**, so the screen showed only a wall of dark water. This was a Phase 4 bug: `CameraDrift` moved **every** intro camera from the moment the intro started, so a shot that goes live at 16.5 s had already sunk 6.6 m and travelled 50 m forward. Each shot now drifts from **its own start time** on the Timeline (`CameraDrift.startTime`, set by `FeaturesBuilder`). The last shot now frames the boat from behind, as designed:
+
+![](Preview/step8_intro_fixed.png)
+
+Also: `LanternFlicker` creates its property block on demand. A script reload during Play mode (Unity's "Recompile and Continue Playing") had left it null and filled the console with 483 errors.
+
+**Lesson for rebuilding:** don't refresh or recompile scripts while the editor is in Play mode. It reloads all code mid-game and wipes every singleton (boat, ocean, pools) without re-running `Awake`, which leaves a broken session. This final rebuild ran in batch mode with the editor closed.
+
 ## 2. Life-size creatures
 
 The creatures were already in metres, but at the small end. The big ones now use the top of their real adult size range, with colliders, gameplay radius, glow and leaps scaled to match. The boat is about 3 m long.
