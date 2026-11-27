@@ -21,10 +21,11 @@ namespace StarlitTides
         [Header("Start value (x) -> max value (y)")]
         public Vector2 tideSpeed = new Vector2(7f, 16f);              // metres per second
         public Vector2 drainPerSecond = new Vector2(0.035f, 0.075f);  // fraction of the light meter
-        public Vector2 obstacleInterval = new Vector2(1.7f, 0.5f);    // seconds between obstacles
-        public Vector2 orbGroupInterval = new Vector2(2.4f, 1.6f);    // seconds between orb groups
-        public Vector2 jellyfishChance = new Vector2(0.1f, 0.4f);
-        public Vector2 logChance = new Vector2(0.15f, 0.35f);
+        public Vector2 obstacleInterval = new Vector2(1.05f, 0.32f);  // seconds between obstacles (wide lane)
+        public Vector2 orbGroupInterval = new Vector2(1.8f, 1.15f);   // seconds between orb groups
+        public Vector2 jellyfishChance = new Vector2(0.1f, 0.3f);
+        public Vector2 logChance = new Vector2(0.15f, 0.25f);
+        public Vector2 creatureChance = new Vector2(0.18f, 0.3f);      // manta rays, turtles, dolphins
 
         [Header("Ramp shape (x = time 0..1, y = level 0..1)")]
         public AnimationCurve rampCurve = new AnimationCurve(
@@ -42,6 +43,7 @@ namespace StarlitTides
         public float OrbGroupInterval { get { return Mathf.Lerp(orbGroupInterval.x, orbGroupInterval.y, Level); } }
         public float JellyfishChance { get { return Mathf.Lerp(jellyfishChance.x, jellyfishChance.y, Level); } }
         public float LogChance { get { return Mathf.Lerp(logChance.x, logChance.y, Level); } }
+        public float CreatureChance { get { return Mathf.Lerp(creatureChance.x, creatureChance.y, Level); } }
 
         void Awake()
         {

@@ -66,12 +66,12 @@ namespace StarlitTides
                 if (age >= nextDartTime)
                 {
                     nextDartTime = age + Mathf.PI * 2f / pulseSpeed;   // once per pulse
-                    dartTargetX = Mathf.Clamp(startX + Random.Range(-swimWidth, swimWidth), -7f, 7f);
+                    dartTargetX = Mathf.Clamp(startX + Random.Range(-swimWidth, swimWidth), -PlayArea.ObstacleHalfWidth, PlayArea.ObstacleHalfWidth);
                 }
                 position.x = Mathf.MoveTowards(position.x, dartTargetX, dt * 3f);
             }
 
-            position.x = Mathf.Clamp(position.x, -8.5f, 8.5f);
+            position.x = Mathf.Clamp(position.x, -14.5f, 14.5f);
             transform.position = position;
 
             // Pulse the light and water glow (0..1, same timing as the shader).

@@ -42,6 +42,20 @@ namespace StarlitTides
         [Range(0f, 1f)] public float sunset = 0f;
         [Range(0f, 1f)] public float storm = 0f;
         [Range(0f, 1f)] public float aurora = 0f;
+        [Tooltip("A faint aurora that always shimmers on clear nights (the weather's aurora adds to it).")]
+        [Range(0f, 1f)] public float ambientAurora = 0.15f;
+
+        [Header("Atmosphere (StarlitAtmosphere.shader)")]
+        [Tooltip("Sea-mist density at sea level.")]
+        public float mistDensity = 0.0042f;
+        [Tooltip("How fast the mist thins with height (bigger = a lower, flatter mist layer).")]
+        public float mistFalloff = 0.07f;
+        [Tooltip("No mist closer than this (metres), so the play area stays crisp.")]
+        public float mistStart = 26f;
+        [Range(0f, 1f)] public float mistMax = 0.72f;
+        [Tooltip("Strength of the god rays streaming from the moon.")]
+        public float godRays = 0.9f;
+        public float godRayThreshold = 0.35f;
         [Range(0f, 1f)] public float lightning = 0f;
         [Tooltip("How fast a lightning flash fades, per second.")]
         public float lightningDecay = 4f;
@@ -49,13 +63,13 @@ namespace StarlitTides
         [Header("Presets")]
         public AtmospherePreset night = new AtmospherePreset
         {
-            fogColor = new Color(0.075f, 0.075f, 0.17f),
-            fogDensity = 0.0012f,
-            ambientSky = new Color(0.24f, 0.28f, 0.55f),
-            ambientEquator = new Color(0.19f, 0.16f, 0.38f),
-            ambientGround = new Color(0.05f, 0.05f, 0.08f),
-            lightColor = new Color(0.66f, 0.76f, 1.0f),
-            lightIntensity = 0.8f
+            fogColor = new Color(0.07f, 0.08f, 0.18f),
+            fogDensity = 0.0008f,
+            ambientSky = new Color(0.2f, 0.25f, 0.55f),
+            ambientEquator = new Color(0.13f, 0.12f, 0.28f),
+            ambientGround = new Color(0.03f, 0.03f, 0.05f),
+            lightColor = new Color(0.7f, 0.8f, 1.0f),
+            lightIntensity = 1.5f
         };
         public AtmospherePreset stormPreset = new AtmospherePreset
         {
@@ -121,6 +135,7 @@ namespace StarlitTides
             ApplyFogAndAmbient(look);
             Vector3 moonDirection = ApplyMoonlight(look);
             SendToSkyShader(moonDirection);
+            SendToAtmosphere(look);
         }
 
         void ApplyFogAndAmbient(AtmospherePreset look)
@@ -150,7 +165,7 @@ namespace StarlitTides
         // Returns the direction TO the moon, which the sky shader needs.
         Vector3 ApplyMoonlight(AtmospherePreset look)
         {
-            if (moonLight == null) return new Vector3(0.32f, 0.21f, 0.92f).normalized;
+            if (moonLight == null) return new Vector3(0.32f, 0.14f, 0.92f).normalized;
 
             RememberNightRotation();
             moonLight.color = look.lightColor;
@@ -168,13 +183,27 @@ namespace StarlitTides
             return -(moonLight.transform.rotation * Vector3.forward);
         }
 
+        // The full-screen atmosphere: haze lit by the sky, moonlight scattered
+        // through it, and god rays. Storms make the air thicker and darker.
+        void SendToAtmosphere(AtmospherePreset look)
+        {
+            Color haze = look.fogColor * 0.85f;
+            Color moonGlow = look.lightColor * Mathf.Min(look.lightIntensity, 1.6f) * 0.11f * (1f - storm * 0.7f);
+            Shader.SetGlobalColor("_AtmoColor", haze);
+            Shader.SetGlobalColor("_AtmoMoonColor", moonGlow);
+            Shader.SetGlobalVector("_AtmoParams", new Vector4(mistDensity * (1f + storm * 1.5f), mistFalloff, mistStart, mistMax));
+            Shader.SetGlobalVector("_AtmoRayParams", new Vector4(godRays * (1f - storm) * (1f - sunset * 0.5f), godRayThreshold, 0.955f, godRays > 0f ? 1f : 0f));
+            Shader.SetGlobalFloat("_AtmoBaseHeight", 0f);
+        }
+
         void SendToSkyShader(Vector3 moonDirection)
         {
             Shader.SetGlobalVector("_MoonDirection", moonDirection);
             Shader.SetGlobalVector("_SunDirection", sunDirection.normalized);
             Shader.SetGlobalFloat("_SunsetBlend", sunset);
             Shader.SetGlobalFloat("_StormAmount", storm);
-            Shader.SetGlobalFloat("_AuroraAmount", aurora);
+            float clearNight = (1f - storm) * (1f - sunset);
+            Shader.SetGlobalFloat("_AuroraAmount", Mathf.Max(aurora, ambientAurora * clearNight));
             Shader.SetGlobalFloat("_LightningFlash", lightning);
             Shader.SetGlobalFloat("_SkyTime", skyTime);
         }

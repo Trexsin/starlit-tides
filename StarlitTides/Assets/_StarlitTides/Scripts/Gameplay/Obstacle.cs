@@ -1,4 +1,4 @@
-// Obstacle: rocks and drifting logs. (Jellyfish builds on this class.)
+// Obstacle: rocks and drifting logs. (Jellyfish and SeaCreature build on this class.)
 //
 // It drifts with the tide like everything else, and can also:
 //   - rollSpeed:     roll around (logs)
@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace StarlitTides
 {
-    public enum ObstacleType { Rock, Log, Jellyfish }
+    public enum ObstacleType { Rock, Log, Jellyfish, SeaCreature }
 
     public class Obstacle : DriftingObject
     {

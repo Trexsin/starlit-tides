@@ -53,11 +53,14 @@ namespace StarlitTides.EditorTools
         private const float PierDeckY = 1.45f;
         private static readonly Vector2 LighthouseXZ = new Vector2(-12f, 182f);
 
-        private static readonly Vector3 TerrainPos = new Vector3(-500f, -20f, -200f);
-        private static readonly Vector3 TerrainSize = new Vector3(800f, 180f, 800f);
-        private const int HeightRes = 513;
-        private const int SplatRes = 512;
-        private const int DetailRes = 512;
+        // The terrain is axis-aligned in WORLD space (Unity terrains can't be
+        // rotated). Its heights are sampled from the layout map through
+        // WorldLayout, so the coast swings round behind the boat.
+        private static readonly Vector3 TerrainPos = new Vector3(-800f, -20f, -600f);
+        private static readonly Vector3 TerrainSize = new Vector3(1100f, 180f, 1100f);
+        private const int HeightRes = 1025;   // ~1 m per sample: crisp beaches and cliffs
+        private const int SplatRes = 1024;
+        private const int DetailRes = 768;
 
         // Palette (see Phase 1 guide): navy, purple, teal, neon cyan, soft gold
         private static readonly Color Gold = new Color(1f, 0.78f, 0.45f);
@@ -110,6 +113,7 @@ namespace StarlitTides.EditorTools
                 Progress("Reflections", 0.9f);     BuildReflectionProbe();
                 Progress("Post-processing", 0.93f); BuildPostProcessing();
                 Progress("Camera", 0.97f);         SetupCamera();
+                Progress("Orientation", 0.98f);    OrientLayout();
 
                 AssetDatabase.SaveAssets();
                 EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
@@ -230,7 +234,7 @@ namespace StarlitTides.EditorTools
         private static float GroundY(float x, float z)
         {
             if (_terrain != null)
-                return _terrain.SampleHeight(new Vector3(x, 0f, z)) + _terrain.transform.position.y;
+                return _terrain.SampleHeight(WorldLayout.ToWorld(new Vector3(x, 0f, z))) + _terrain.transform.position.y;
             return Height(x, z);
         }
 
@@ -336,7 +340,7 @@ namespace StarlitTides.EditorTools
             return sum / norm;
         }
 
-        private static Texture2D SaveTexture(Texture2D tex, string name, bool alpha, bool repeat = true)
+        private static Texture2D SaveTexture(Texture2D tex, string name, bool alpha, bool repeat = true, bool normalMap = false)
         {
             string rel = "Textures/" + name + ".png";
             string full = Gen + "/" + rel;
@@ -347,26 +351,56 @@ namespace StarlitTides.EditorTools
             imp.wrapMode = repeat ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
             imp.alphaIsTransparency = alpha;
             imp.mipmapEnabled = true;
+            imp.filterMode = FilterMode.Trilinear;
+            imp.anisoLevel = 8;                        // sharp at grazing angles (beaches seen from the sea)
+            imp.textureCompression = TextureImporterCompression.CompressedHQ;
+            if (normalMap) imp.textureType = TextureImporterType.NormalMap;
             imp.SaveAndReimport();
             return AssetDatabase.LoadAssetAtPath<Texture2D>(full);
         }
 
-        private static Texture2D GroundTexture(string name, Color baseCol, Color speckle, float contrast, int seed)
+        private static Texture2D _lastGroundNormal;
+
+        // A tileable 1024 px ground texture plus a matching normal map made from
+        // the same noise (so pebbles, grass tufts and rock cracks catch the moonlight).
+        private static Texture2D GroundTexture(string name, Color baseCol, Color speckle, float contrast, int seed, float bumpiness)
         {
-            const int size = 256;
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, true);
+            const int size = 1024;
+            var height = new float[size * size];
+            var pixels = new Color32[size * size];
             for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)
             {
                 float u = x / (float)size, v = y / (float)size;
                 float n = TileFbm(u, v, seed);
                 float fine = TileNoise(u * 64f, v * 64f, 64, seed + 50);
+                float grain = TileNoise(u * 256f, v * 256f, 256, seed + 90);
                 Color c = baseCol * (1f - contrast * 0.5f + n * contrast);
+                c *= 0.9f + grain * 0.2f;
                 c = Color.Lerp(c, speckle, Mathf.Clamp01((fine - 0.78f) * 4f));
                 c.a = 1f;
-                tex.SetPixel(x, y, c);
+                pixels[y * size + x] = c;
+                height[y * size + x] = n * 0.6f + fine * 0.3f + grain * 0.15f;
             }
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, true);
+            tex.SetPixels32(pixels);
             tex.Apply();
+
+            // Normal map from the height field (central differences, wrapping at the edges).
+            var normals = new Color32[size * size];
+            float strength = bumpiness * 6f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float hl = height[y * size + (x + size - 1) % size], hr = height[y * size + (x + 1) % size];
+                float hd = height[((y + size - 1) % size) * size + x], hu = height[((y + 1) % size) * size + x];
+                Vector3 nrm = new Vector3((hl - hr) * strength, (hd - hu) * strength, 1f).normalized;
+                normals[y * size + x] = new Color(nrm.x * 0.5f + 0.5f, nrm.y * 0.5f + 0.5f, nrm.z * 0.5f + 0.5f, 1f);
+            }
+            var nTex = new Texture2D(size, size, TextureFormat.RGBA32, true, true);
+            nTex.SetPixels32(normals);
+            nTex.Apply();
+            _lastGroundNormal = SaveTexture(nTex, name + "_N", false, true, true);
             return SaveTexture(tex, name, false);
         }
 
@@ -435,26 +469,34 @@ namespace StarlitTides.EditorTools
         // ==================================================================
         // MATERIALS
         // ==================================================================
+        // Phase 8: every solid material uses the stylized shader (StylizedMaterials).
+        private static StylizedMaterials.Kind KindOf(string name)
+        {
+            switch (name)
+            {
+                case "M_Bark": case "M_PineLeaves": case "M_RoundLeaves": case "M_PalmLeaves":
+                    return StylizedMaterials.Kind.Foliage;
+                case "M_Mountain1": case "M_Mountain2": case "M_Mountain3":
+                    return StylizedMaterials.Kind.Distant;
+                case "M_Rock":
+                    return StylizedMaterials.Kind.Natural;
+                case "M_WindowOff": case "M_Metal": case "M_ClothTeal": case "M_ClothRed": case "M_ClothGold":
+                    return StylizedMaterials.Kind.Detail;
+                default:
+                    return StylizedMaterials.Kind.Prop;
+            }
+        }
+
         private static Material Lit(string name, Color color, float smoothness = 0.15f, Texture2D tex = null, bool instancing = false)
         {
-            var m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = name };
-            m.SetColor("_BaseColor", color);
-            m.SetFloat("_Smoothness", smoothness);
-            m.SetFloat("_Metallic", 0f);
-            if (tex != null) m.SetTexture("_BaseMap", tex);
-            m.enableInstancing = instancing;
+            var m = StylizedMaterials.Create(name, color, smoothness, KindOf(name), default, tex, instancing);
             Mats[name] = SaveAsset(m, "Materials/" + name + ".mat");
             return m;
         }
 
         private static Material Emissive(string name, Color baseCol, Color emission)
         {
-            var m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = name };
-            m.SetColor("_BaseColor", baseCol);
-            m.SetFloat("_Smoothness", 0.6f);
-            m.EnableKeyword("_EMISSION");
-            m.SetColor("_EmissionColor", emission);
-            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            var m = StylizedMaterials.Create(name, baseCol, 0.6f, StylizedMaterials.Kind.Glow, emission);
             Mats[name] = SaveAsset(m, "Materials/" + name + ".mat");
             return m;
         }
@@ -511,10 +553,39 @@ namespace StarlitTides.EditorTools
             Lit("M_Mountain1", new Color(0.07f, 0.07f, 0.12f), 0.0f);
             Lit("M_Mountain2", new Color(0.09f, 0.09f, 0.16f), 0.0f);
             Lit("M_Mountain3", new Color(0.12f, 0.11f, 0.21f), 0.0f);
+            // Phase 8: moonlit snow caps (vertex mask from ProcMesh.MountainRidge),
+            // each layer's snow a little bluer and dimmer: aerial perspective
+            StylizedMaterials.SetAccent(M("M_Mountain1"), new Color(0.46f, 0.5f, 0.68f));
+            StylizedMaterials.SetAccent(M("M_Mountain2"), new Color(0.38f, 0.42f, 0.62f));
+            StylizedMaterials.SetAccent(M("M_Mountain3"), new Color(0.32f, 0.35f, 0.56f));
+            StylizedMaterials.SetAccent(M("M_Rock"), new Color(0.17f, 0.27f, 0.25f));   // moss on beach rocks
 
             // custom shaders
-            Custom("M_Ocean", "StarlitTides/Ocean");
-            Custom("M_NightSky", "Skybox/StarlitNight");
+            // Moody night sea: deep navy, teal only in the shallows. Glow accents are
+            // mostly cyan, with rare violet blooms and the odd gold sparkle.
+            Material ocean = Custom("M_Ocean", "StarlitTides/Ocean");
+            ocean.SetColor("_DeepColor", new Color(0.006f, 0.018f, 0.07f));
+            ocean.SetColor("_ShallowColor", new Color(0.03f, 0.32f, 0.42f));
+            ocean.SetColor("_HorizonColor", new Color(0.07f, 0.08f, 0.2f));
+            ocean.SetColor("_BioColor", new Color(0.12f, 2.5f, 3.2f));
+            ocean.SetColor("_BioColor2", new Color(1.1f, 0.5f, 3.0f));
+            ocean.SetColor("_SparkleColor3", new Color(3.0f, 2.1f, 0.6f));
+
+            // A deep, painterly night: navy zenith, a soft violet horizon with a faint
+            // teal glow, a rich Milky Way, a big moon halo and moonlit cloud banks.
+            Material sky = Custom("M_NightSky", "Skybox/StarlitNight");
+            sky.SetColor("_ZenithColor", new Color(0.008f, 0.012f, 0.05f));
+            sky.SetColor("_MidColor", new Color(0.04f, 0.035f, 0.13f));
+            sky.SetColor("_HorizonColor", new Color(0.17f, 0.1f, 0.27f));
+            sky.SetColor("_HorizonGlow", new Color(0.04f, 0.17f, 0.24f));
+            sky.SetFloat("_StarBrightness", 3.0f);
+            sky.SetFloat("_GalaxyIntensity", 1.35f);
+            sky.SetColor("_GalaxyColorA", new Color(0.36f, 0.22f, 0.6f));
+            sky.SetColor("_GalaxyColorB", new Color(0.14f, 0.42f, 0.6f));
+            sky.SetColor("_MoonHaloColor", new Color(0.4f, 0.48f, 0.85f));
+            sky.SetFloat("_MoonHalo", 1.5f);
+            sky.SetFloat("_AuroraDistance", 5.5f);          // the faint aurora sits far away, low on the horizon
+            sky.SetFloat("_NightCloudCover", 0.36f);
             Material beam = Custom("M_LighthouseBeam", "StarlitTides/LightBeam");
             beam.SetColor("_Color", new Color(1.6f, 1.25f, 0.7f));
             beam.SetFloat("_Intensity", 0.9f);
@@ -540,12 +611,14 @@ namespace StarlitTides.EditorTools
             if (moon == null) moon = new GameObject("Moonlight").AddComponent<Light>();
             moon.gameObject.name = "Moonlight";
             moon.type = LightType.Directional;
-            Vector3 toMoon = new Vector3(0.32f, 0.21f, 0.92f).normalized;   // ahead-right, low: moon path across the sea
+            // ahead-right, low: moon path across the sea. Phase 8 lowered it from 12 deg
+            // to about 8 deg above the horizon so it stays in the higher gameplay framing.
+            Vector3 toMoon = new Vector3(0.32f, 0.14f, 0.92f).normalized;
             moon.transform.rotation = Quaternion.LookRotation(-toMoon, Vector3.up);
             moon.color = new Color(0.66f, 0.76f, 1f);
-            moon.intensity = 0.8f;
+            moon.intensity = 1.5f;
             moon.shadows = LightShadows.Soft;
-            moon.shadowStrength = 0.75f;
+            moon.shadowStrength = 0.85f;
             moon.lightmapBakeType = LightmapBakeType.Realtime;
 
             RenderSettings.skybox = M("M_NightSky");
@@ -556,6 +629,19 @@ namespace StarlitTides.EditorTools
             // Fully dynamic lighting: no baked GI (the sky changes during play).
             Lightmapping.bakedGI = false;
             Lightmapping.realtimeGI = false;
+
+            // Sky fill: the moon is AHEAD of the boat, so everything the camera sees
+            // would show its unlit side and read as a flat silhouette. A soft, cool
+            // light from behind the camera (the glow of the night sky) models the
+            // fronts of the boat, rocks and creatures. No shadows: it's sky light.
+            GameObject fillGo = Child("Sky Fill Light");
+            fillGo.transform.rotation = Quaternion.LookRotation(new Vector3(-0.25f, -0.55f, 1f).normalized, Vector3.up);
+            Light fill = fillGo.AddComponent<Light>();
+            fill.type = LightType.Directional;
+            fill.color = new Color(0.45f, 0.55f, 1f);
+            fill.intensity = 0.4f;
+            fill.shadows = LightShadows.None;
+            fill.lightmapBakeType = LightmapBakeType.Realtime;
 
             GameObject controllers = Child("Controllers");
             var sky = controllers.AddComponent<SkyController>();
@@ -579,19 +665,19 @@ namespace StarlitTides.EditorTools
             for (int j = 0; j < HeightRes; j++)
             for (int i = 0; i < HeightRes; i++)
             {
-                float x = TerrainPos.x + i / (float)(HeightRes - 1) * TerrainSize.x;
-                float z = TerrainPos.z + j / (float)(HeightRes - 1) * TerrainSize.z;
-                heights[j, i] = Mathf.Clamp01((Height(x, z) - TerrainPos.y) / TerrainSize.y);
+                Vector2 l = WorldLayout.ToLayoutXZ(TerrainPos.x + i / (float)(HeightRes - 1) * TerrainSize.x,
+                                                   TerrainPos.z + j / (float)(HeightRes - 1) * TerrainSize.z);
+                heights[j, i] = Mathf.Clamp01((Height(l.x, l.y) - TerrainPos.y) / TerrainSize.y);
             }
             td.SetHeights(0, 0, heights);
 
             // ---- ground layers: sand, grass, rock, path ----
             var layers = new[]
             {
-                MakeLayer("TL_Sand", GroundTexture("T_Sand", new Color(0.62f, 0.57f, 0.48f), new Color(0.8f, 0.77f, 0.7f), 0.35f, 1), 6f, 0.05f),
-                MakeLayer("TL_Grass", GroundTexture("T_Grass", new Color(0.24f, 0.36f, 0.24f), new Color(0.32f, 0.44f, 0.26f), 0.55f, 2), 8f, 0.0f),
-                MakeLayer("TL_Rock", GroundTexture("T_Rock", new Color(0.30f, 0.30f, 0.34f), new Color(0.45f, 0.45f, 0.5f), 0.7f, 3), 10f, 0.1f),
-                MakeLayer("TL_Path", GroundTexture("T_Path", new Color(0.42f, 0.34f, 0.27f), new Color(0.52f, 0.48f, 0.45f), 0.5f, 4), 5f, 0.05f),
+                MakeLayer("TL_Sand", GroundTexture("T_Sand", new Color(0.62f, 0.57f, 0.48f), new Color(0.8f, 0.77f, 0.7f), 0.35f, 1, 0.6f), 6f, 0.05f),
+                MakeLayer("TL_Grass", GroundTexture("T_Grass", new Color(0.24f, 0.36f, 0.24f), new Color(0.32f, 0.44f, 0.26f), 0.55f, 2, 0.8f), 8f, 0.0f),
+                MakeLayer("TL_Rock", GroundTexture("T_Rock", new Color(0.30f, 0.30f, 0.34f), new Color(0.45f, 0.45f, 0.5f), 0.7f, 3, 1.6f), 10f, 0.1f),
+                MakeLayer("TL_Path", GroundTexture("T_Path", new Color(0.42f, 0.34f, 0.27f), new Color(0.52f, 0.48f, 0.45f), 0.5f, 4, 0.9f), 5f, 0.05f),
             };
             td.terrainLayers = layers;
             td.alphamapResolution = SplatRes;
@@ -599,8 +685,9 @@ namespace StarlitTides.EditorTools
             for (int j = 0; j < SplatRes; j++)
             for (int i = 0; i < SplatRes; i++)
             {
-                float x = TerrainPos.x + (i + 0.5f) / SplatRes * TerrainSize.x;
-                float z = TerrainPos.z + (j + 0.5f) / SplatRes * TerrainSize.z;
+                Vector2 l = WorldLayout.ToLayoutXZ(TerrainPos.x + (i + 0.5f) / SplatRes * TerrainSize.x,
+                                                   TerrainPos.z + (j + 0.5f) / SplatRes * TerrainSize.z);
+                float x = l.x, z = l.y;
                 float s = Inland(x, z);
                 float y = Height(x, z);
                 float slope = Slope(x, z);
@@ -645,8 +732,9 @@ namespace StarlitTides.EditorTools
             for (int j = 0; j < DetailRes; j++)
             for (int i = 0; i < DetailRes; i++)
             {
-                float x = TerrainPos.x + (i + 0.5f) / DetailRes * TerrainSize.x;
-                float z = TerrainPos.z + (j + 0.5f) / DetailRes * TerrainSize.z;
+                Vector2 l = WorldLayout.ToLayoutXZ(TerrainPos.x + (i + 0.5f) / DetailRes * TerrainSize.x,
+                                                   TerrainPos.z + (j + 0.5f) / DetailRes * TerrainSize.z);
+                float x = l.x, z = l.y;
                 float s = Inland(x, z);
                 if (s < 11f || x < -260f || z > 380f) continue;                     // keep it near the action
                 if (InLagoonOrChannel(x, z, 1.25f)) continue;
@@ -663,6 +751,14 @@ namespace StarlitTides.EditorTools
             td.wavingGrassTint = new Color(0.55f, 0.68f, 0.62f);
 
             SaveAsset(td, "Terrain/StarlitTerrainData.asset");
+            // The splat (ground layer) weights live in textures that must be saved
+            // INSIDE the TerrainData asset. Painted before the asset existed, they were
+            // never stored, so Unity fell back to "layer 0 everywhere" and every hill
+            // rendered as pale sand. Re-apply them now and add them as sub-assets.
+            td.SetAlphamaps(0, 0, alpha);
+            foreach (Texture2D splat in td.alphamapTextures)
+                if (splat != null && !AssetDatabase.Contains(splat)) AssetDatabase.AddObjectToAsset(splat, td);
+            EditorUtility.SetDirty(td);
 
             GameObject go = Terrain.CreateTerrainGameObject(td);
             go.name = "Terrain";
@@ -670,8 +766,9 @@ namespace StarlitTides.EditorTools
             go.transform.position = TerrainPos;
             _terrain = go.GetComponent<Terrain>();
             _terrain.materialTemplate = new Material(Shader.Find("Universal Render Pipeline/Terrain/Lit"));
+            _terrain.materialTemplate.EnableKeyword("_NORMALMAP");                       // use the layers' normal maps
             SaveAsset(_terrain.materialTemplate, "Materials/M_Terrain.mat");
-            _terrain.heightmapPixelError = 4f;
+            _terrain.heightmapPixelError = 2f;
             _terrain.basemapDistance = 600f;
             _terrain.detailObjectDistance = 110f;
             _terrain.detailObjectDensity = 1f;
@@ -683,6 +780,8 @@ namespace StarlitTides.EditorTools
         private static TerrainLayer MakeLayer(string name, Texture2D tex, float tile, float smoothness)
         {
             var layer = new TerrainLayer { diffuseTexture = tex, tileSize = new Vector2(tile, tile), smoothness = smoothness, metallic = 0f };
+            layer.normalMapTexture = _lastGroundNormal;
+            layer.normalScale = 1f;
             return SaveAsset(layer, "Terrain/" + name + ".terrainlayer");
         }
 
@@ -691,7 +790,7 @@ namespace StarlitTides.EditorTools
         // ==================================================================
         private static void BuildOcean()
         {
-            Mesh grid = SaveMesh(OceanGrid(2400f, 300, 200f));
+            Mesh grid = SaveMesh(OceanGrid(2400f, 420, 200f));
             GameObject sea = MeshObject("Ocean", grid, new[] { M("M_Ocean") }, _root, Vector3.zero, Quaternion.identity, false, false);
             sea.GetComponent<MeshRenderer>().receiveShadows = false;
             sea.GetComponent<MeshRenderer>().lightProbeUsage = LightProbeUsage.Off;
@@ -1241,7 +1340,7 @@ namespace StarlitTides.EditorTools
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.6f, 1f, 1f), new Color(0.3f, 0.8f, 1f));
             var em = ps.emission; em.rateOverTime = 30f;
-            var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Box; shape.scale = new Vector3(60f, 0.4f, 140f);
+            var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Box; shape.scale = new Vector3(90f, 0.4f, 140f);
             var vel = ps.velocityOverLifetime; vel.enabled = true; vel.space = ParticleSystemSimulationSpace.World;
             vel.x = new ParticleSystem.MinMaxCurve(-0.1f, 0.1f); vel.y = new ParticleSystem.MinMaxCurve(-0.02f, 0.05f); vel.z = new ParticleSystem.MinMaxCurve(-4.2f, -3.8f);
             var col = ps.colorOverLifetime; col.enabled = true; col.color = BlinkGradient();
@@ -1333,39 +1432,39 @@ namespace StarlitTides.EditorTools
             tone.mode.Override(TonemappingMode.ACES);
 
             var bloom = Add<Bloom>();
-            bloom.threshold.Override(0.85f);
-            bloom.intensity.Override(1.35f);
-            bloom.scatter.Override(0.72f);
+            bloom.threshold.Override(0.95f);     // highlights bloom into the misty air
+            bloom.intensity.Override(1.15f);
+            bloom.scatter.Override(0.62f);
             bloom.tint.Override(new Color(0.85f, 0.95f, 1f));
             bloom.highQualityFiltering.Override(true);
 
             var adj = Add<ColorAdjustments>();
             adj.postExposure.Override(0.35f);
-            adj.contrast.Override(16f);
-            adj.saturation.Override(18f);
-            adj.colorFilter.Override(new Color(0.94f, 0.96f, 1f));
+            adj.contrast.Override(22f);         // deeper blacks, punchier highlights
+            adj.saturation.Override(14f);           // rich but restrained: the glow provides the colour
+            adj.colorFilter.Override(new Color(0.95f, 0.96f, 1f));
 
             var wb = Add<WhiteBalance>();
-            wb.temperature.Override(-10f);
-            wb.tint.Override(8f);
+            wb.temperature.Override(-9f);
+            wb.tint.Override(6f);
 
             var split = Add<SplitToning>();
-            split.shadows.Override(new Color(0.32f, 0.26f, 0.58f));   // purple-navy shadows
-            split.highlights.Override(new Color(1f, 0.82f, 0.58f));   // soft gold highlights
-            split.balance.Override(-25f);
+            split.shadows.Override(new Color(0.24f, 0.24f, 0.55f));   // cool navy shadows
+            split.highlights.Override(new Color(1f, 0.8f, 0.6f));     // warm moon/lantern highlights
+            split.balance.Override(-20f);
 
             var vig = Add<Vignette>();
             vig.color.Override(new Color(0.02f, 0.03f, 0.08f));
-            vig.intensity.Override(0.32f);
+            vig.intensity.Override(0.3f);
             vig.smoothness.Override(0.45f);
 
             var grain = Add<FilmGrain>();
             grain.type.Override(FilmGrainLookup.Thin1);
-            grain.intensity.Override(0.15f);
+            grain.intensity.Override(0f);           // no grain: it reads as blur/noise at 1080p+
             grain.response.Override(0.8f);
 
             var ca = Add<ChromaticAberration>();
-            ca.intensity.Override(0.04f);           // gameplay spikes this on hits
+            ca.intensity.Override(0f);              // gameplay spikes this on hits
 
             var dof = Add<DepthOfField>();
             dof.mode.Override(DepthOfFieldMode.Off); // menus switch this to Bokeh
@@ -1384,6 +1483,29 @@ namespace StarlitTides.EditorTools
             vol.isGlobal = true;
             vol.priority = 0;
             vol.sharedProfile = profile;
+        }
+
+        // ==================================================================
+        // ORIENTATION - turn the land so the boat sails out to sea (WorldLayout)
+        // ==================================================================
+        private static void OrientLayout()
+        {
+            // These follow the gameplay lane / the sky, not the land, so they stay put.
+            var keep = new HashSet<string> { "Controllers", "Terrain", "Ocean", "Ocean Reflection Probe", "Play Lane (Phase 3)", "Ambient VFX", "Sky Fill Light" };
+            foreach (Transform child in _root)
+                if (!keep.Contains(child.name) && child.GetComponent<Volume>() == null)
+                    WorldLayout.Apply(child);
+
+            Transform vfx = _root.Find("Ambient VFX");
+            if (vfx != null)
+                foreach (Transform child in vfx)
+                    if (child.name.StartsWith("Fireflies")) WorldLayout.Apply(child);
+
+            // The ocean keeps the lagoon calm: move that zone with the lagoon.
+            Vector3 lagoon = WorldLayout.ToWorld(new Vector3(LagoonCenter.x, 0f, LagoonCenter.y));
+            float radius = (LagoonRadii.x + LagoonRadii.y) * 0.5f + 4f;
+            M("M_Ocean").SetVector("_CalmZone", new Vector4(lagoon.x, lagoon.z, radius, radius));
+            EditorUtility.SetDirty(M("M_Ocean"));
         }
 
         // ==================================================================

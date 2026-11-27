@@ -237,11 +237,8 @@ namespace StarlitTides.EditorTools
             }
             else
             {
-                material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-                material.SetColor("_BaseColor", new Color(1f, 0.8f, 0.35f));
-                material.SetFloat("_Smoothness", 0.9f);
-                material.EnableKeyword("_EMISSION");
-                material.SetColor("_EmissionColor", new Color(5f, 3.4f, 1.1f));
+                material = StylizedMaterials.Create("M_GoldenStar", new Color(1f, 0.8f, 0.35f), 0.9f,
+                                                    StylizedMaterials.Kind.Glow, new Color(5f, 3.4f, 1.1f));
             }
             material.name = "M_GoldenStar";
             SaveAsset(material, GeneratedFolder + "/M_GoldenStar.mat");
@@ -417,6 +414,14 @@ namespace StarlitTides.EditorTools
             CinemachineTrack cameraTrack = timeline.CreateTrack<CinemachineTrack>(null, "Intro Cameras");
             director.SetGenericBinding(cameraTrack, brain);
             Transform cameraParent = Child("Intro Cameras", introObject.transform).transform;
+
+            // Shots 2-4 film the land, which WorldLayout turned so the boat sails out to sea.
+            for (int i = 1; i <= 3; i++)
+            {
+                shots[i].position = WorldLayout.ToWorld(shots[i].position);
+                shots[i].lookAt = WorldLayout.ToWorld(shots[i].lookAt);
+                shots[i].drift = WorldLayout.ToWorldDirection(shots[i].drift);   // a velocity: turn only
+            }
 
             foreach (Shot shot in shots)
             {

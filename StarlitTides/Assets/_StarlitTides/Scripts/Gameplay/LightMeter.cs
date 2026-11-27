@@ -30,11 +30,11 @@ namespace StarlitTides
 
         [Header("What the meter controls (x = when empty, y = when full)")]
         public Light boatLight;
-        public Vector2 lightRange = new Vector2(3f, 14f);
-        public Vector2 lightIntensity = new Vector2(0.4f, 3.5f);
+        public Vector2 lightRange = new Vector2(4f, 20f);
+        public Vector2 lightIntensity = new Vector2(0.6f, 5f);
         public Renderer glowRenderer;
         [ColorUsage(false, true)] public Color glowColor = new Color(3.2f, 2.3f, 1.2f);
-        public Vector2 glowIntensity = new Vector2(0.08f, 0.45f);
+        public Vector2 glowIntensity = new Vector2(0.03f, 0.14f);   // a soft glow through the paper, folds stay readable
         public WaterDisturber waterGlow;
         public Vector2 waterGlowStrength = new Vector2(0.15f, 0.7f);
         [Tooltip("Below this the light flickers as a warning.")]

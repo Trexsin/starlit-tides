@@ -39,11 +39,11 @@ Shader "StarlitTides/Ocean"
 
         [Header(Reflection and Lighting)]
         _ReflectionStrength ("Reflection Strength", Range(0, 2)) = 0.9
-        _ReflectionRoughness ("Reflection Roughness", Range(0, 1)) = 0.08
+        _ReflectionRoughness ("Reflection Roughness", Range(0, 1)) = 0.04
         _FresnelPower   ("Fresnel Power", Range(1, 10)) = 5
         _SpecularPower  ("Moon Glint Sharpness", Range(16, 2048)) = 900
-        _SpecularIntensity ("Moon Glint Intensity", Range(0, 20)) = 6
-        _MoonPathGlitter ("Moon Path Glitter", Range(0, 10)) = 3
+        _SpecularIntensity ("Moon Glint Intensity", Range(0, 20)) = 8
+        _MoonPathGlitter ("Moon Path Glitter", Range(0, 10)) = 4.5
         _LanternReflection ("Lantern Reflection Strength", Range(0, 10)) = 2.5
 
         [Header(Waves  xy dir  z steepness  w wavelength)]
@@ -57,7 +57,7 @@ Shader "StarlitTides/Ocean"
         _TideInfluence ("Tide Scroll Influence", Range(0, 1)) = 1
 
         [Header(Ripples)]
-        _RippleScale    ("Ripple Scale", Float) = 0.35
+        _RippleScale    ("Ripple Scale", Float) = 0.5
         _RippleStrength ("Ripple Strength", Range(0, 1)) = 0.35
         _RippleSpeed    ("Ripple Speed", Float) = 0.6
 
@@ -71,8 +71,11 @@ Shader "StarlitTides/Ocean"
 
         [Header(Bioluminescence)]
         [HDR] _BioColor ("Bioluminescence Colour", Color) = (0.15, 2.6, 3.2, 1)
+        [HDR] _BioColor2 ("Bioluminescence Colour 2 (blooms)", Color) = (2.2, 0.35, 3.0, 1)
+        [HDR] _SparkleColor3 ("Sparkle Accent Colour", Color) = (3.4, 2.2, 0.5, 1)
+        _BioHueScale ("Colour Bloom Size", Float) = 0.02
         _BioAmbient     ("Ambient Plankton Glow", Range(0, 2)) = 0.02
-        _BioCrest       ("Wave Crest Glow", Range(0, 4)) = 0.7
+        _BioCrest       ("Wave Crest Glow", Range(0, 4)) = 0.1
         _BioShore       ("Breaking Surf Glow", Range(0, 6)) = 1.6
         _BioDisturb     ("Disturbance Glow", Range(0, 10)) = 3.0
         _SparkleScale   ("Plankton Sparkle Cell Size (m)", Float) = 1.1
@@ -139,7 +142,8 @@ Shader "StarlitTides/Ocean"
                 float  _RippleScale, _RippleStrength, _RippleSpeed;
                 float4 _FoamColor;
                 float  _FoamDistance, _FoamSpeed, _FoamScale, _CrestFoamThreshold, _CrestFoamAmount;
-                float4 _BioColor;
+                float4 _BioColor, _BioColor2, _SparkleColor3;
+                float  _BioHueScale;
                 float  _BioAmbient, _BioCrest, _BioShore, _BioDisturb;
                 float  _SparkleScale, _SparkleDensity, _SparkleIntensity;
             CBUFFER_END
@@ -153,6 +157,7 @@ Shader "StarlitTides/Ocean"
             float  _SeaNightGlow;     // 0 = no plankton glow (daytime in the intro), 1 = full
             float4 _DisturbPoints[32];// xy = world XZ, z = radius, w = strength
             int    _DisturbCount;
+            float  _StarlitLaneHalfWidth; // PlayArea.cs: half width of the play lane (0 = no channel tint)
 
             struct Attributes
             {
@@ -260,6 +265,14 @@ Shader "StarlitTides/Ocean"
                 float hx = SN_Fbm2(p + float2(e, 0) + o1, 3) + SN_Fbm2((p + float2(e, 0)) * 1.7 + o2, 2) * 0.5;
                 float hz = SN_Fbm2(p + float2(0, e) + o1, 3) + SN_Fbm2((p + float2(0, e)) * 1.7 + o2, 2) * 0.5;
                 float2 slope = float2(hx - h, hz - h) / e;
+                // Micro ripples: a fine, fast layer that gives close water a crisp,
+                // detailed sparkle. Faded out with distance so it never shimmers.
+                float2 pf = p * 4.3 + float2(t * 1.1, -t * 0.8);
+                float ef = 0.2;
+                float f0 = SN_Fbm2(pf, 2);
+                float fx = SN_Fbm2(pf + float2(ef, 0), 2);
+                float fz = SN_Fbm2(pf + float2(0, ef), 2);
+                slope += float2(fx - f0, fz - f0) / ef * 0.5 * distanceFade;
                 slope *= _RippleStrength * distanceFade;
                 return normalize(float3(-slope.x, 1, -slope.y));
             }
@@ -290,9 +303,13 @@ Shader "StarlitTides/Ocean"
                     float r = max(dp.z, 0.05);
                     float d = distance(posWS.xz, dp.xy);
                     if (d > r * 2.0) continue;
-                    float core = exp(-(d * d) / (r * r * 0.18));
-                    float ringPos = (d - r * 0.75) / (r * 0.25);
-                    float ring = exp(-ringPos * ringPos) * 0.6;
+                    // Tight bright core + a crisp ring: reads as light spilling out of
+                    // the plankton, not as a soft blurry pool.
+                    float core = exp(-(d * d) / (r * r * 0.07));
+                    float ringPos = (d - r * 0.72) / (r * 0.12);
+                    float ring = exp(-ringPos * ringPos) * 0.8;
+                    float halo = exp(-(d * d) / (r * r * 0.5)) * 0.12;
+                    core += halo;
                     glow += (core + ring) * dp.w;
                 }
                 return glow;
@@ -387,17 +404,37 @@ Shader "StarlitTides/Ocean"
                 // large drifting "bloom" patches break up the regular wave pattern
                 float bloomPatch = smoothstep(0.35, 0.75, SN_Fbm2(IN.flowXZ * 0.025 + 5.0, 3));
                 float glow = _BioAmbient * plankton
-                           + crest * _BioCrest * (0.25 + plankton) * (0.3 + bloomPatch)
+                           + crest * _BioCrest * (0.25 + plankton) * (0.15 + bloomPatch * 1.6)   // glow gathers in drifting blooms, the open sea stays dark
                            + shoreFoam * _BioShore * plankton
-                           + SoftLimit(DisturbanceGlow(posWS)) * _BioDisturb * (0.7 + 0.6 * foamNoise)
-                           + sparkle * _SparkleIntensity;
-                float3 bioLight = glow * _BioColor.rgb * _SeaNightGlow;
+                           + SoftLimit(DisturbanceGlow(posWS)) * _BioDisturb * (0.7 + 0.6 * foamNoise);
+
+                // Colourful plankton: big drifting blooms shift between cyan and
+                // magenta, and each sparkle picks cyan, magenta or gold.
+                float hueMix = smoothstep(0.64, 0.9, SN_Fbm2(IN.flowXZ * _BioHueScale + float2(31.0, 7.0) + _OceanTime * 0.01, 3));
+                float3 bioCol = lerp(_BioColor.rgb, _BioColor2.rgb, hueMix);
+                float sparkleHash = SN_Hash12(floor(IN.flowXZ / _SparkleScale) + 3.7);
+                float3 sparkleCol = sparkleHash < 0.55 ? bioCol : (sparkleHash < 0.82 ? _BioColor2.rgb : _SparkleColor3.rgb);
+                float3 bioLight = (glow * bioCol + sparkle * _SparkleIntensity * sparkleCol) * _SeaNightGlow;
 
                 // Starburst power-up: the plankton glows brighter and golden light
                 // shimmers across the whole sea (sparkles and wave crests the most).
                 bioLight *= 1.0 + _SeaGlowBoost * 0.4;
                 float boost = _SeaGlowBoost * (0.07 + 0.3 * bloomPatch + sparkle * 2.5 + crest * 0.7);
                 bioLight += boost * _SeaGlowColor.rgb;
+
+                // ---- channel edge (Phase 8) ----
+                // Past the play lane the sea is a little darker and the plankton
+                // dimmer, so the lane reads as a glowing channel. The effect fades
+                // out far to the sides and behind the boat (the bay stays as it was).
+                if (_StarlitLaneHalfWidth > 0.0)
+                {
+                    float ax = abs(posWS.x);
+                    float outside = smoothstep(_StarlitLaneHalfWidth + 3.0, _StarlitLaneHalfWidth + 14.0, ax)
+                                  * (1.0 - smoothstep(_StarlitLaneHalfWidth + 90.0, _StarlitLaneHalfWidth + 200.0, ax))
+                                  * smoothstep(-60.0, -30.0, posWS.z);
+                    color *= 1.0 - 0.14 * outside;
+                    bioLight *= 1.0 - 0.4 * outside;
+                }
 
                 color += bioLight;
 

@@ -41,7 +41,6 @@ namespace StarlitTides
         [Header("Waves")]
         public int waveRows = 3;
         public float rowSpacing = 14f;
-        public float laneWidth = 16f;
         public float segmentWidth = 4f;
         [Tooltip("Extra swell added to the ocean (1 = waves twice as big) right after the splash.")]
         public float swell = 1.2f;
@@ -169,11 +168,15 @@ namespace StarlitTides
         void SpawnWaves(float startZ)
         {
             if (waveSegmentPrefab == null) return;
+            float laneWidth = PlayArea.ObstacleHalfWidth * 2f;
             int segments = Mathf.RoundToInt(laneWidth / segmentWidth);
 
+            // Each row's gap is close to the last one, so the boat can always
+            // reach it in time even in the wide Phase 8 lane.
+            int gap = UnityEngine.Random.Range(segments / 4, segments - segments / 4);
             for (int row = 0; row < waveRows; row++)
             {
-                int gap = UnityEngine.Random.Range(0, segments);
+                if (row > 0) gap = Mathf.Clamp(gap + UnityEngine.Random.Range(-3, 4), 0, segments - 1);
                 float z = startZ - 4f - row * rowSpacing;
                 for (int i = 0; i < segments; i++)
                 {

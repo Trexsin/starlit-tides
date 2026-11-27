@@ -2,7 +2,7 @@
 
 A 3D arcade survival game for a university **Computer Graphics** course, built in **Unity 6 (URP)**.
 
-Steer a small glowing paper boat across a dark night sea beside a sleeping coastal village. Real bioluminescent beaches inspired the setting: the boat's light slowly fades, so you keep collecting glowing plankton orbs to stay alive while dodging rocks, drifting logs and jellyfish. If the light runs out, darkness swallows the boat.
+Steer a small glowing paper boat out across a dark night sea, away from a sleeping coastal village. Real bioluminescent beaches inspired the setting: the boat's light slowly fades, so you keep collecting glowing plankton orbs to stay alive while dodging rocks, drifting logs, jellyfish and glowing sea creatures: manta rays, sea turtles and leaping dolphins. If the light runs out, darkness swallows the boat.
 
 ![Main menu](Phase6/Preview/menu.png)
 
@@ -17,6 +17,8 @@ Steer a small glowing paper boat across a dark night sea beside a sleeping coast
 - **Bioluminescent ocean shader** (hand-written URP HLSL): Gerstner waves, depth colour, refraction, Fresnel reflections, shoreline foam, and neon plankton glow around every object that touches the water
 - **Procedural night sky**: twinkling stars, Milky Way, moon, animated aurora, storm clouds with lightning, sunset
 - **One-click world builder**: village with glowing windows, lantern-lit square, market stalls, pier, arched bridge over a lagoon, lighthouse with sweeping volumetric beams, forest, grassland and layered mountains
+- **Procedural sea creatures**: a manta ray, a sea turtle and a dolphin, built in code and animated by one shader that reads fin and tail masks from vertex colours. They have glowing spots, turtle-shell seams and flank stripes
+- **Sharp image**: 4× MSAA, a contrast-adaptive sharpening pass (CAS) after post-processing, 1024 px terrain textures with normal maps, and detailed rocks
 - **Procedural whale**: a lofted mesh with a custom shader (swimming vertex wave, plankton spots, glowing belly grooves, Fresnel rim)
 
 **Gameplay**
@@ -42,11 +44,11 @@ Steer a small glowing paper boat across a dark night sea beside a sleeping coast
 
 ## Getting started
 
-1. Install Unity **6000.5.10f1** with Unity Hub. Add **Windows Build Support (Mono)** if you want to build the `.exe`.
+1. Install Unity **6000.6.11f1** with Unity Hub. Add **Windows Build Support (Mono)** if you want to build the `.exe`.
 2. Unity Hub → **Add project from disk** → select the [`StarlitTides/`](StarlitTides/) folder.
 3. Open `Assets/_StarlitTides/Scenes/StarlitBay.unity` and press **▶ Play**.
 
-The scene is already fully built. To rebuild any part of it, use the **Starlit Tides** menu in the editor (steps 4–8). To make the game:
+The scene is built by the **Starlit Tides** menu in the editor (steps 4–8 and 10). **Starlit Tides → Rebuild Everything** runs them all and saves the scene. To make the game:
 - **Starlit Tides → 9. Build Windows (.exe)**, written to `StarlitTides/Builds/Windows/`
 - **Starlit Tides → Build macOS (.app)**, written to `StarlitTides/Builds/macOS/`
 
@@ -56,13 +58,14 @@ Builds are not stored in git; make them from the project.
 
 | Folder | What's inside |
 |---|---|
-| [`StarlitTides/`](StarlitTides/) | **The Unity project**, with all six phases applied |
+| [`StarlitTides/`](StarlitTides/) | **The Unity project**, with all phases applied |
 | [`Phase1/`](Phase1/Phase1_Setup.md) | Project setup guide + editor setup script (folders, packages, settings) |
 | [`Phase2/`](Phase2/Phase2_Environment.md) | Environment: shaders (ocean, sky, light beam), environment scripts, world builder |
 | [`Phase3/`](Phase3/Phase3_Gameplay.md) | Core gameplay: boat, light meter, orbs, obstacles, spawners, camera, gameplay builder |
 | [`Phase4/`](Phase4/Phase4_Features.md) | Extra features 1–6: light vision, combos, Starburst, weather, near misses, intro cinematic |
 | [`Phase5/`](Phase5/Phase5_Bonus.md) | Bonus features 7–11: whale, living village, Photo Mode, procedural audio, high scores |
 | [`Phase6/`](Phase6/Phase6_Polish.md) | UI, settings, quality presets, optimisation and the build tools |
+| [`Phase7/`](Phase7/Phase7_Visual_Upgrade.md) | Out to sea: turned the bay, made the image sharper, added sea-creature obstacles |
 | [`Online/`](Online/) | Unity `LeaderboardClient.cs` that talks to the leaderboard API |
 | [`leaderboard-api/`](leaderboard-api/README.md) | Vercel serverless API (`/api/scores`) backed by Neon Postgres |
 | `starlit_tides.cpp`, `Makefile` | An earlier C++ / OpenGL (GLUT) prototype of the game |
@@ -71,7 +74,7 @@ Each `PhaseN/` guide explains that phase: its scripts, shaders, editor steps and
 
 ## Requirements
 
-- Unity **6000.5.x** with URP 17.5, Input System, **Cinemachine 3.1.8**, Shader Graph, ProBuilder, Timeline, TextMeshPro (uGUI)
+- Unity **6000.6.x** with URP, Input System, **Cinemachine 3.1.8**, Shader Graph, ProBuilder, Timeline, TextMeshPro (uGUI)
 - For your own leaderboard: a Vercel account and the Neon integration (free tiers are enough)
 
 ## Controls

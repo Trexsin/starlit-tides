@@ -16,11 +16,12 @@ namespace StarlitTides
     {
         public GameObject orbPrefab;
         public float spawnZ = 110f;
-        public Vector2 laneX = new Vector2(-6.5f, 6.5f);
         public float orbSpacing = 3.2f;
         [Tooltip("Skip orbs closer than this to an obstacle.")]
         public float obstacleClearance = 2.4f;
-        public int prewarmCount = 40;
+        public int prewarmCount = 60;
+        [Tooltip("Orb groups scale with the lane width to this power (1 = same density as obstacles).")]
+        [Range(0f, 1f)] public float densityPower = 0.75f;
 
         float timer;
 
@@ -39,7 +40,9 @@ namespace StarlitTides
 
             float interval = 2.2f;
             if (DifficultyManager.Instance != null) interval = DifficultyManager.Instance.OrbGroupInterval;
-            timer = interval * Random.Range(0.8f, 1.2f);
+            // A wider lane gets more orb groups, but a little less than obstacles:
+            // groups are long trails, so they already cover more of the sea.
+            timer = interval / Mathf.Pow(PlayArea.DensityScale, densityPower) * Random.Range(0.8f, 1.2f);
 
             SpawnGroup();
         }
@@ -48,7 +51,8 @@ namespace StarlitTides
         {
             int pattern = Random.Range(0, 4);
             int count = Random.Range(4, 8);
-            float startX = Random.Range(laneX.x, laneX.y);
+            float halfWidth = PlayArea.OrbHalfWidth;
+            float startX = Random.Range(-halfWidth, halfWidth);
 
             for (int i = 0; i < count; i++)
             {
@@ -76,7 +80,7 @@ namespace StarlitTides
                     z = spawnZ + Random.Range(0f, 4f);
                 }
 
-                x = Mathf.Clamp(x, laneX.x, laneX.y);
+                x = Mathf.Clamp(x, -halfWidth, halfWidth);
                 Vector3 position = new Vector3(x, 0f, z);
                 if (IsNearObstacle(position)) continue;
 

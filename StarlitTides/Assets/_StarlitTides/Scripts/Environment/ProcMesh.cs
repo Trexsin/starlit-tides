@@ -7,8 +7,8 @@
 //  ocean grid and the light-beam cone.
 //
 //  Style: FLAT SHADED (every triangle has its own vertices + face normal).
-//  This gives the faceted, hand-crafted "low-poly" look that reads clearly at
-//  night under coloured lights.
+//  Phase 8: every mesh also gets smoothed normals in UV3 (BakeSmoothNormals),
+//  used by the outline pass of StarlitStylized.shader.
 //
 //  All generators are deterministic: same seed -> same mesh.
 // =============================================================================
@@ -25,8 +25,32 @@ namespace StarlitTides
         private readonly List<Vector3> _normals = new List<Vector3>();
         private readonly List<Vector2> _uvs = new List<Vector2>();
         private readonly List<List<int>> _subs = new List<List<int>>();
+        // Phase 8 per-vertex extras (see SmoothGroup, SphereCenter, Accent below)
+        private readonly List<float> _areas = new List<float>();
+        private readonly List<int> _groups = new List<int>();
+        private readonly List<Vector4> _sphere = new List<Vector4>();
+        private readonly List<Color> _colors = new List<Color>();
 
         public Matrix4x4 Transform = Matrix4x4.identity;   // applied to every point added
+
+        // ---- Phase 8: soft shapes ----
+        /// <summary>
+        /// 0 = flat shaded (the old look). Triangles added while this is > 0 are smoothed
+        /// with every other triangle of the SAME group that shares a corner, as long as
+        /// their faces meet at less than SmoothAngle degrees. So a cylinder's sides
+        /// turn round while its caps stay crisp, and two parts in different groups
+        /// (a trunk and its leaves) never blend.
+        /// </summary>
+        public int SmoothGroup = 0;
+        public float SmoothAngle = 65f;
+        /// <summary>
+        /// Foliage trick: bend normals toward "outward from this centre" by SphereBlend
+        /// (0..1). A clump of faceted cones then shades like one soft painted blob.
+        /// </summary>
+        public Vector3 SphereCenter;
+        public float SphereBlend = 0f;
+        /// <summary>Accent mask (0..1) written to vertex colour red; StarlitStylized lerps to _AccentColor.</summary>
+        public float Accent = 0f;
 
         public MeshBuilder(int subMeshCount = 1)
         {
@@ -51,11 +75,16 @@ namespace StarlitTides
                 (ub, uc) = (uc, ub);
                 n = -n;
             }
+            float area = n.magnitude * 0.5f;
             n.Normalize();
             int i = _verts.Count;
             _verts.Add(a); _verts.Add(b); _verts.Add(c);
             _normals.Add(n); _normals.Add(n); _normals.Add(n);
             _uvs.Add(ua); _uvs.Add(ub); _uvs.Add(uc);
+            Vector3 sc = Transform.MultiplyPoint3x4(SphereCenter);
+            var sph = new Vector4(sc.x, sc.y, sc.z, SphereBlend);
+            var col = new Color(Accent, 0f, 0f, 1f);
+            for (int k = 0; k < 3; k++) { _areas.Add(area); _groups.Add(SmoothGroup); _sphere.Add(sph); _colors.Add(col); }
             List<int> t = _subs[sub];
             t.Add(i); t.Add(i + 1); t.Add(i + 2);
         }
@@ -131,18 +160,147 @@ namespace StarlitTides
             }
         }
 
+        /// <summary>
+        /// Bevelled box: every edge is cut at 45 degrees ('bevel' metres wide) and every
+        /// corner gets a small triangle. The bevels catch the moonlit rim light, so
+        /// boxes stop looking like raw blocks.
+        /// </summary>
+        public void ChamferBox(int sub, Vector3 center, Vector3 size, float bevel, Quaternion rotation = default)
+        {
+            // (Quaternion == uses a dot product, so "== default" is never true: test the fields.)
+            if (rotation.x == 0f && rotation.y == 0f && rotation.z == 0f && rotation.w == 0f) rotation = Quaternion.identity;
+            float[] h = { size.x * 0.5f, size.y * 0.5f, size.z * 0.5f };
+            float bv = Mathf.Min(bevel, Mathf.Min(h[0], Mathf.Min(h[1], h[2])) * 0.9f);
+            Vector3 P(float x, float y, float z) => center + rotation * new Vector3(x, y, z);
+            Vector3 Pa(float[] v) => P(v[0], v[1], v[2]);
+            Vector3 Axis(int a, float sgn) { var v = Vector3.zero; v[a] = sgn; return rotation * v; }
+
+            // 6 faces, inset by the bevel
+            for (int a = 0; a < 3; a++)
+            for (int sg = -1; sg <= 1; sg += 2)
+            {
+                int u = (a + 1) % 3, w = (a + 2) % 3;
+                float[] c0 = new float[3], c1 = new float[3], c2 = new float[3], c3 = new float[3];
+                c0[a] = c1[a] = c2[a] = c3[a] = sg * h[a];
+                c0[u] = -(h[u] - bv); c0[w] = -(h[w] - bv);
+                c1[u] =  (h[u] - bv); c1[w] = -(h[w] - bv);
+                c2[u] =  (h[u] - bv); c2[w] =  (h[w] - bv);
+                c3[u] = -(h[u] - bv); c3[w] =  (h[w] - bv);
+                Quad(sub, Pa(c0), Pa(c1), Pa(c2), Pa(c3), Axis(a, sg));
+            }
+            // 12 edge strips
+            for (int a = 0; a < 3; a++)
+            {
+                int b = (a + 1) % 3, c = (a + 2) % 3;
+                for (int sa = -1; sa <= 1; sa += 2)
+                for (int sb = -1; sb <= 1; sb += 2)
+                {
+                    float[] p0 = new float[3], p1 = new float[3], p2 = new float[3], p3 = new float[3];
+                    p0[a] = sa * h[a];        p0[b] = sb * (h[b] - bv); p0[c] = -(h[c] - bv);
+                    p1[a] = sa * h[a];        p1[b] = sb * (h[b] - bv); p1[c] =  (h[c] - bv);
+                    p2[a] = sa * (h[a] - bv); p2[b] = sb * h[b];        p2[c] =  (h[c] - bv);
+                    p3[a] = sa * (h[a] - bv); p3[b] = sb * h[b];        p3[c] = -(h[c] - bv);
+                    Quad(sub, Pa(p0), Pa(p1), Pa(p2), Pa(p3), Axis(a, sa) + Axis(b, sb));
+                }
+            }
+            // 8 corners
+            for (int sx = -1; sx <= 1; sx += 2)
+            for (int sy = -1; sy <= 1; sy += 2)
+            for (int sz = -1; sz <= 1; sz += 2)
+                Triangle(sub, P(sx * h[0], sy * (h[1] - bv), sz * (h[2] - bv)),
+                              P(sx * (h[0] - bv), sy * h[1], sz * (h[2] - bv)),
+                              P(sx * (h[0] - bv), sy * (h[1] - bv), sz * h[2]),
+                              rotation * new Vector3(sx, sy, sz));
+        }
+
+        // Smoothing groups + sphere normals (see the fields at the top).
+        private List<Vector3> FinalNormals()
+        {
+            var result = new List<Vector3>(_normals);
+            bool anySmooth = false, anySphere = false;
+            for (int i = 0; i < _groups.Count; i++) { anySmooth |= _groups[i] > 0; anySphere |= _sphere[i].w > 0f; }
+
+            if (anySmooth)
+            {
+                float minDot = Mathf.Cos(SmoothAngle * Mathf.Deg2Rad);
+                var buckets = new Dictionary<(Vector3Int, int), List<int>>();
+                for (int i = 0; i < _verts.Count; i++)
+                {
+                    if (_groups[i] <= 0) continue;
+                    var key = (Vector3Int.RoundToInt(_verts[i] * 1000f), _groups[i]);
+                    if (!buckets.TryGetValue(key, out List<int> list)) buckets[key] = list = new List<int>(6);
+                    list.Add(i);
+                }
+                foreach (List<int> list in buckets.Values)
+                    foreach (int i in list)
+                    {
+                        Vector3 sum = Vector3.zero;
+                        foreach (int j in list)
+                            if (Vector3.Dot(_normals[i], _normals[j]) >= minDot) sum += _normals[j] * Mathf.Max(_areas[j], 1e-6f);
+                        if (sum.sqrMagnitude > 1e-12f) result[i] = sum.normalized;
+                    }
+            }
+            if (anySphere)
+                for (int i = 0; i < _verts.Count; i++)
+                {
+                    Vector4 s = _sphere[i];
+                    if (s.w <= 0f) continue;
+                    Vector3 outward = _verts[i] - new Vector3(s.x, s.y, s.z);
+                    if (outward.sqrMagnitude < 1e-8f) continue;
+                    result[i] = Vector3.Lerp(result[i], outward.normalized, s.w).normalized;
+                }
+            return result;
+        }
+
         public Mesh ToMesh(string name)
         {
             var mesh = new Mesh { name = name };
             if (_verts.Count > 65000) mesh.indexFormat = IndexFormat.UInt32;
             mesh.SetVertices(_verts);
-            mesh.SetNormals(_normals);
+            mesh.SetNormals(FinalNormals());
+            bool anyAccent = false;
+            foreach (Color c in _colors) if (c.r > 0f) { anyAccent = true; break; }
+            if (anyAccent) mesh.SetColors(_colors);
             mesh.SetUVs(0, _uvs);
             mesh.subMeshCount = _subs.Count;
             for (int i = 0; i < _subs.Count; i++) mesh.SetTriangles(_subs[i], i, false);
             mesh.RecalculateBounds();
             mesh.RecalculateTangents();
+            BakeSmoothNormals(mesh);
             return mesh;
+        }
+
+        /// <summary>
+        /// Phase 8: stores a SMOOTHED normal in UV3 for the stylized outline pass.
+        /// Flat shading gives every triangle its own vertices, so the vertices at one
+        /// corner point in different directions. Pushing them out along those normals
+        /// would tear the outline hull apart at every edge. Here all vertices at the
+        /// same position get the average of their normals, so the hull stays closed.
+        /// The visible shading still uses the flat normals.
+        /// </summary>
+        public static void BakeSmoothNormals(Mesh mesh)
+        {
+            Vector3[] verts = mesh.vertices;
+            Vector3[] normals = mesh.normals;
+            if (verts.Length == 0 || normals.Length != verts.Length) return;
+
+            var sums = new Dictionary<Vector3Int, Vector3>(verts.Length / 3);
+            var keys = new Vector3Int[verts.Length];
+            for (int i = 0; i < verts.Length; i++)
+            {
+                Vector3Int key = Vector3Int.RoundToInt(verts[i] * 1000f);   // weld within 1 mm
+                keys[i] = key;
+                sums.TryGetValue(key, out Vector3 sum);
+                sums[key] = sum + normals[i];
+            }
+
+            var smooth = new List<Vector3>(verts.Length);
+            for (int i = 0; i < verts.Length; i++)
+            {
+                Vector3 n = sums[keys[i]];
+                smooth.Add(n.sqrMagnitude > 1e-8f ? n.normalized : normals[i]);
+            }
+            mesh.SetUVs(3, smooth);
         }
     }
 
@@ -186,9 +344,9 @@ namespace StarlitTides
             footprintRadius = Mathf.Sqrt(w * w + d * d) * 0.5f + over;
 
             // stone foundation (goes 1.5 m into the ground for uneven terrain)
-            mb.Box(HouseStone, new Vector3(0, baseH * 0.5f - 0.75f, 0), new Vector3(w + 0.3f, baseH + 1.5f, d + 0.3f));
-            // walls
-            mb.Box(HouseWall, new Vector3(0, baseH + h * 0.5f, 0), new Vector3(w, h, d));
+            mb.ChamferBox(HouseStone, new Vector3(0, baseH * 0.5f - 0.75f, 0), new Vector3(w + 0.3f, baseH + 1.5f, d + 0.3f), 0.16f);
+            // walls (Phase 8: bevelled edges catch the moonlit rim light)
+            mb.ChamferBox(HouseWall, new Vector3(0, baseH + h * 0.5f, 0), new Vector3(w, h, d), 0.1f);
 
             // timber frame: corner posts + floor beams (cheap detail that reads well)
             float t = 0.22f;
@@ -211,11 +369,26 @@ namespace StarlitTides
             Vector3 rA = new Vector3(-hx, ridgeY, 0), rB = new Vector3(hx, ridgeY, 0);
             Vector3 fA = new Vector3(-hx, eaveY - 0.25f, -hz), fB = new Vector3(hx, eaveY - 0.25f, -hz);
             Vector3 bA = new Vector3(-hx, eaveY - 0.25f, hz), bB = new Vector3(hx, eaveY - 0.25f, hz);
-            mb.Quad(HouseRoof, fA, rA, rB, fB, new Vector3(0, 1, -1), w, roofH);        // front slope
-            mb.Quad(HouseRoof, bB, rB, rA, bA, new Vector3(0, 1, 1), w, roofH);         // back slope
+            // Phase 8: each slope is 5 strips that sag gently (like an old tiled roof);
+            // the facets between strips read as rows of tiles under the moon.
             Vector3 down = Vector3.down * thick;
-            mb.Quad(HouseRoof, fA + down, fB + down, rB + down, rA + down, new Vector3(0, -1, 1));  // undersides
-            mb.Quad(HouseRoof, bB + down, bA + down, rA + down, rB + down, new Vector3(0, -1, -1));
+            const int strips = 5;
+            const float sag = 0.14f;
+            Vector3 SlopePoint(Vector3 eave, Vector3 ridge, float t) => Vector3.Lerp(eave, ridge, t) + Vector3.down * (sag * Mathf.Sin(Mathf.PI * t));
+            for (int k = 0; k < strips; k++)
+            {
+                float t0 = k / (float)strips, t1 = (k + 1) / (float)strips;
+                Vector3 f0A = SlopePoint(fA, rA, t0), f0B = SlopePoint(fB, rB, t0), f1A = SlopePoint(fA, rA, t1), f1B = SlopePoint(fB, rB, t1);
+                Vector3 b0A = SlopePoint(bA, rA, t0), b0B = SlopePoint(bB, rB, t0), b1A = SlopePoint(bA, rA, t1), b1B = SlopePoint(bB, rB, t1);
+                mb.Quad(HouseRoof, f0A, f1A, f1B, f0B, new Vector3(0, 1, -1), w, roofH / strips);                 // front slope
+                mb.Quad(HouseRoof, b0B, b1B, b1A, b0A, new Vector3(0, 1, 1), w, roofH / strips);                  // back slope
+                mb.Quad(HouseRoof, f0A + down, f0B + down, f1B + down, f1A + down, new Vector3(0, -1, 1));        // undersides
+                mb.Quad(HouseRoof, b0B + down, b0A + down, b1A + down, b1B + down, new Vector3(0, -1, -1));
+            }
+            // rounded ridge cap
+            mb.SmoothGroup = 1;
+            AddTube(mb, HouseRoof, rA + new Vector3(-0.05f, 0.02f, 0f), rB + new Vector3(0.05f, 0.02f, 0f), 0.17f, 0.17f, 10);
+            mb.SmoothGroup = 0;
             mb.Quad(HouseRoof, fA, fB, fB + down, fA + down, Vector3.back);              // eave edges
             mb.Quad(HouseRoof, bB, bA, bA + down, bB + down, Vector3.forward);
             // gable triangles (wall colour)
@@ -224,7 +397,8 @@ namespace StarlitTides
 
             // chimney
             float cx = R(-w * 0.3f, w * 0.3f);
-            mb.Box(HouseStone, new Vector3(cx, ridgeY - 0.3f, d * 0.22f), new Vector3(0.6f, roofH * 0.9f + 0.8f, 0.6f));
+            mb.ChamferBox(HouseStone, new Vector3(cx, ridgeY - 0.3f, d * 0.22f), new Vector3(0.6f, roofH * 0.9f + 0.8f, 0.6f), 0.06f);
+            mb.ChamferBox(HouseStone, new Vector3(cx, ridgeY - 0.3f + (roofH * 0.9f + 0.8f) * 0.5f, d * 0.22f), new Vector3(0.78f, 0.16f, 0.78f), 0.04f);   // chimney cap
 
             // door on the front (-Z)
             float doorX = R(-w * 0.25f, w * 0.25f);
@@ -347,24 +521,67 @@ namespace StarlitTides
         // ---------------------------------------------------------------------
         // Trees
         // ---------------------------------------------------------------------
+        // ---------------------------------------------------------------------
+        // Trees (Phase 8): soft, painterly shapes instead of faceted cones.
+        //  - 16-sided tiers with a frilly, drooping rim (alternating long/short
+        //    "needle" points) and a closed underside
+        //  - smoothing groups: the trunk and the leaves are each smooth, but never
+        //    blend into each other
+        //  - sphere normals: leaf normals lean out from the crown's centre, so the
+        //    whole tree shades like one soft blob of foliage, not 4 separate cones
+        // ---------------------------------------------------------------------
         public static Mesh PineTree(int seed)
         {
             var rng = new System.Random(seed);
             float R(float a, float b) => a + (float)rng.NextDouble() * (b - a);
             var mb = new MeshBuilder(2);
             float height = R(7f, 12f);
-            mb.Cylinder(TreeBark, Vector3.down * 0.5f, 0.32f, 0.18f, height * 0.4f + 0.5f, 6);
+
+            mb.SmoothGroup = 1;
+            mb.Cylinder(TreeBark, Vector3.down * 0.5f, 0.32f, 0.18f, height * 0.4f + 0.5f, 10, false);
+
+            mb.SmoothGroup = 2;
+            mb.SphereCenter = new Vector3(0f, height * 0.5f, 0f);
+            mb.SphereBlend = 0.55f;
             int tiers = 4;
             float y = height * 0.22f;
             float radius = height * 0.28f;
             for (int i = 0; i < tiers; i++)
             {
                 float tierH = height * (0.42f - i * 0.05f);
-                mb.Cylinder(TreeLeaves, new Vector3(R(-0.1f, 0.1f), y, R(-0.1f, 0.1f)), radius, 0f, tierH, 7, false, true, R(0, 25));
+                PineTier(mb, new Vector3(R(-0.1f, 0.1f), y, R(-0.1f, 0.1f)), radius, tierH, 16, R(0f, 6.28f), rng);
                 y += tierH * 0.48f;
                 radius *= 0.74f;
             }
             return mb.ToMesh("Pine_" + seed);
+        }
+
+        // One tier: apex -> shoulder ring -> frilly drooping rim, plus an underside.
+        private static void PineTier(MeshBuilder mb, Vector3 basePos, float radius, float height, int segs, float phase, System.Random rng)
+        {
+            Vector3 apex = basePos + Vector3.up * height;
+            var shoulder = new Vector3[segs];
+            var rim = new Vector3[segs];
+            for (int k = 0; k < segs; k++)
+            {
+                float a = phase + k / (float)segs * Mathf.PI * 2f;
+                var dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                bool tip = k % 2 == 0;
+                float r = radius * (tip ? 1.08f : 0.9f) * (0.95f + 0.1f * (float)rng.NextDouble());
+                float droop = radius * (tip ? 0.22f : 0.08f);
+                rim[k] = basePos + dir * r + Vector3.down * droop;
+                shoulder[k] = basePos + dir * (radius * 0.62f) + Vector3.up * (height * 0.3f);
+            }
+            Vector3 under = basePos + Vector3.up * (height * 0.14f);
+            for (int k = 0; k < segs; k++)
+            {
+                int n = (k + 1) % segs;
+                Vector3 outward = (shoulder[k] + shoulder[n]) * 0.5f - basePos;
+                outward.y = Mathf.Abs(outward.y) + radius * 0.4f;
+                mb.Triangle(TreeLeaves, apex, shoulder[k], shoulder[n], outward + Vector3.up * radius);
+                mb.Quad(TreeLeaves, shoulder[k], rim[k], rim[n], shoulder[n], outward);
+                mb.Triangle(TreeLeaves, under, rim[n], rim[k], Vector3.down);
+            }
         }
 
         public static Mesh RoundTree(int seed)
@@ -373,13 +590,18 @@ namespace StarlitTides
             float R(float a, float b) => a + (float)rng.NextDouble() * (b - a);
             var mb = new MeshBuilder(2);
             float trunkH = R(2.2f, 3.4f);
-            mb.Cylinder(TreeBark, Vector3.down * 0.4f, 0.28f, 0.2f, trunkH + 0.6f, 6);
+            mb.SmoothGroup = 1;
+            mb.Cylinder(TreeBark, Vector3.down * 0.4f, 0.28f, 0.2f, trunkH + 0.6f, 10);
             int blobs = 3;
+            Vector3 crown = new Vector3(0f, trunkH + 2.2f, 0f);
             for (int i = 0; i < blobs; i++)
             {
                 Vector3 c = new Vector3(R(-0.9f, 0.9f), trunkH + 1.4f + R(0f, 1.2f), R(-0.9f, 0.9f));
                 float r = R(1.5f, 2.3f);
-                Icosphere(mb, TreeLeaves, c, r, 1, seed * 7 + i, 0.18f);
+                mb.SmoothGroup = 2 + i;
+                mb.SphereCenter = Vector3.Lerp(c, crown, 0.5f);   // soft blobs that still read as one crown
+                mb.SphereBlend = 0.6f;
+                Icosphere(mb, TreeLeaves, c, r, 2, seed * 7 + i, 0.12f);
             }
             return mb.ToMesh("RoundTree_" + seed);
         }
@@ -399,7 +621,9 @@ namespace StarlitTides
                 Vector3 p = new Vector3(lean * t * t, height * t, 0);
                 float r = Mathf.Lerp(0.26f, 0.16f, t);
                 // trunk ring segments slightly wider at each joint (palm look)
-                AddTube(mb, TreeBark, prev, p, r * 1.12f, r, 6);
+                mb.SmoothGroup = 1;
+                AddTube(mb, TreeBark, prev, p, r * 1.12f, r, 10);
+                mb.SmoothGroup = 0;
                 prev = p;
             }
             Vector3 top = prev;
@@ -425,7 +649,10 @@ namespace StarlitTides
             }
             // coconuts
             for (int i = 0; i < 3; i++)
-                Icosphere(mb, TreeBark, top + new Vector3(R(-0.3f, 0.3f), -0.3f, R(-0.3f, 0.3f)), 0.18f, 0, seed + i, 0f);
+            {
+                mb.SmoothGroup = 10 + i;
+                Icosphere(mb, TreeBark, top + new Vector3(R(-0.3f, 0.3f), -0.3f, R(-0.3f, 0.3f)), 0.18f, 1, seed + i, 0f);
+            }
             return mb.ToMesh("Palm_" + seed);
         }
 
@@ -504,11 +731,85 @@ namespace StarlitTides
             }
         }
 
-        public static Mesh Rock(int seed, float radius = 1f, float roughness = 0.35f, Vector3 scale = default)
+        // A detailed rock: a finely subdivided icosphere (642 verts at detail 3,
+        // 2562 at detail 4) pushed out by several octaves of noise, with ridged
+        // "crack" noise on top. Shared vertices give smooth shading, so the
+        // shape comes from the geometry itself instead of big flat facets.
+        public static Mesh Rock(int seed, float radius = 1f, float roughness = 0.35f, Vector3 scale = default, int detail = 3)
         {
-            var mb = new MeshBuilder(1);
-            Icosphere(mb, 0, Vector3.zero, radius, 1, seed, roughness, scale == default ? new Vector3(1.2f, 0.75f, 1f) : scale);
-            return mb.ToMesh("Rock_" + seed);
+            if (scale == default) scale = new Vector3(1.2f, 0.75f, 1f);
+            float t = (1f + Mathf.Sqrt(5f)) / 2f;
+            var verts = new List<Vector3>
+            {
+                new Vector3(-1, t, 0), new Vector3(1, t, 0), new Vector3(-1, -t, 0), new Vector3(1, -t, 0),
+                new Vector3(0, -1, t), new Vector3(0, 1, t), new Vector3(0, -1, -t), new Vector3(0, 1, -t),
+                new Vector3(t, 0, -1), new Vector3(t, 0, 1), new Vector3(-t, 0, -1), new Vector3(-t, 0, 1)
+            };
+            var faces = new List<int>
+            {
+                0,11,5, 0,5,1, 0,1,7, 0,7,10, 0,10,11, 1,5,9, 5,11,4, 11,10,2, 10,7,6, 7,1,8,
+                3,9,4, 3,4,2, 3,2,6, 3,6,8, 3,8,9, 4,9,5, 2,4,11, 6,2,10, 8,6,7, 9,8,1
+            };
+            for (int i = 0; i < verts.Count; i++) verts[i] = verts[i].normalized;
+            for (int s = 0; s < detail; s++)
+            {
+                var cache = new Dictionary<long, int>();
+                int Mid(int a, int b)
+                {
+                    long key = a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
+                    if (cache.TryGetValue(key, out int idx)) return idx;
+                    verts.Add(((verts[a] + verts[b]) * 0.5f).normalized);
+                    cache[key] = verts.Count - 1;
+                    return verts.Count - 1;
+                }
+                var next = new List<int>(faces.Count * 4);
+                for (int f = 0; f < faces.Count; f += 3)
+                {
+                    int v0 = faces[f], v1 = faces[f + 1], v2 = faces[f + 2];
+                    int a = Mid(v0, v1), b = Mid(v1, v2), c = Mid(v2, v0);
+                    next.AddRange(new[] { v0, a, c, v1, b, a, v2, c, b, a, b, c });
+                }
+                faces = next;
+            }
+
+            float ox = seed * 13.37f, oy = seed * 7.13f;
+            float Noise3(Vector3 p) =>
+                (Mathf.PerlinNoise(p.x + ox, p.y + oy) + Mathf.PerlinNoise(p.y + oy * 0.7f, p.z + ox * 1.3f) + Mathf.PerlinNoise(p.z + ox * 0.4f, p.x + oy * 1.1f)) / 3f;
+            var displaced = new Vector3[verts.Count];
+            var colors = new Color[verts.Count];
+            for (int i = 0; i < verts.Count; i++)
+            {
+                Vector3 v = verts[i];
+                // Big lumpy shape + medium bumps + fine grit.
+                float n = 0f, amp = 1f, freq = 1.4f, norm = 0f;
+                for (int o = 0; o < 4; o++)
+                {
+                    n += (Noise3(v * freq) * 2f - 1f) * amp;
+                    norm += amp; amp *= 0.45f; freq *= 2.2f;
+                }
+                n /= norm;
+                // Ridged noise cuts sharp creases and ledges into the surface.
+                float ridge = 1f - Mathf.Abs(Noise3(v * 3.1f + Vector3.one * 5f) * 2f - 1f);
+                ridge = ridge * ridge * ridge;
+                float r = radius * (1f + n * roughness * 1.3f - ridge * roughness * 0.25f);
+                // Flatten the underside a little so it sits on the ground/sea floor.
+                Vector3 p = v * r;
+                if (p.y < 0f) p.y *= 0.7f;
+                displaced[i] = Vector3.Scale(p, scale);
+                // Vertex colour red = accent mask (Phase 8): moss / lichen on the
+                // upward-facing tops, broken up by noise, never in the creases.
+                float moss = Mathf.InverseLerp(0.3f, 0.85f, v.y) * Mathf.Clamp01(0.55f + n * 1.6f) * (1f - ridge * 0.6f);
+                colors[i] = new Color(Mathf.Clamp01(moss), 0f, 0f, 1f);
+            }
+
+            var mesh = new Mesh { name = "Rock_" + seed };
+            if (displaced.Length > 65000) mesh.indexFormat = IndexFormat.UInt32;
+            mesh.vertices = displaced;
+            mesh.colors = colors;
+            mesh.triangles = faces.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         // ---------------------------------------------------------------------
@@ -517,11 +818,14 @@ namespace StarlitTides
         // ---------------------------------------------------------------------
         public static Mesh Lighthouse(out float lampHeight)
         {
+            // Phase 8: 32 segments and smoothing groups (round tower, crisp ledges).
             var mb = new MeshBuilder(4);
-            int seg = 14;
+            int seg = 32;
             float towerH = 16f, r0 = 2.7f, r1 = 1.8f;
             int stripes = 6;
+            mb.SmoothGroup = 1;
             mb.Cylinder(LhMetal, Vector3.down * 2f, r0 + 0.6f, r0 + 0.4f, 2.6f, seg);             // rock-anchored base
+            mb.SmoothGroup = 2;                                                                       // one smooth tower across all stripes
             for (int i = 0; i < stripes; i++)
             {
                 float y0 = 0.6f + towerH * i / stripes, y1 = 0.6f + towerH * (i + 1) / stripes;
@@ -529,19 +833,25 @@ namespace StarlitTides
                 mb.Cylinder(i % 2 == 0 ? LhWhite : LhRed, Vector3.up * y0, ra, rb, y1 - y0, seg, false);
             }
             float top = 0.6f + towerH;
+            mb.SmoothGroup = 3;
+            mb.Cylinder(LhMetal, Vector3.up * (top - 0.35f), r1 + 0.05f, r1 + 0.95f, 0.35f, seg, false); // corbel flaring out under the gallery
             mb.Cylinder(LhMetal, Vector3.up * top, r1 + 0.9f, r1 + 0.9f, 0.3f, seg, true, true);      // gallery floor
-            for (int i = 0; i < 16; i++)                                                               // railing posts
+            mb.SmoothGroup = 0;
+            for (int i = 0; i < 24; i++)                                                               // railing posts
             {
-                float a = i / 16f * Mathf.PI * 2f;
+                float a = i / 24f * Mathf.PI * 2f;
                 Vector3 p = new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a)) * (r1 + 0.8f) + Vector3.up * (top + 0.3f);
                 mb.Box(LhMetal, p + Vector3.up * 0.5f, new Vector3(0.06f, 1f, 0.06f));
             }
+            mb.SmoothGroup = 4;
             mb.Cylinder(LhMetal, Vector3.up * (top + 1.25f), r1 + 0.82f, r1 + 0.82f, 0.08f, seg, true, true); // rail ring
-            mb.Cylinder(LhGlass, Vector3.up * (top + 0.3f), 1.35f, 1.35f, 2.2f, 10, false);           // lamp room glass
-            mb.Cylinder(LhMetal, Vector3.up * (top + 2.5f), 1.7f, 0.15f, 1.7f, 10, false, true);      // cap
-            mb.Cylinder(LhMetal, Vector3.up * (top + 4.1f), 0.18f, 0.0f, 0.8f, 6, false);             // spire
-            // door
-            mb.Box(LhMetal, new Vector3(0, 1.6f, -r0 + 0.1f), new Vector3(1.0f, 2.0f, 0.3f));
+            mb.SmoothGroup = 5;
+            mb.Cylinder(LhGlass, Vector3.up * (top + 0.3f), 1.35f, 1.35f, 2.2f, 24, false);           // lamp room glass
+            mb.SmoothGroup = 6;
+            mb.Cylinder(LhMetal, Vector3.up * (top + 2.5f), 1.7f, 0.15f, 1.7f, 24, false, true);      // cap
+            mb.Cylinder(LhMetal, Vector3.up * (top + 4.1f), 0.18f, 0.0f, 0.8f, 12, false);            // spire
+            mb.SmoothGroup = 0;
+            mb.ChamferBox(LhMetal, new Vector3(0, 1.6f, -r0 + 0.1f), new Vector3(1.0f, 2.0f, 0.3f), 0.06f);   // door
             lampHeight = top + 1.4f;
             return mb.ToMesh("Lighthouse");
         }
@@ -619,36 +929,81 @@ namespace StarlitTides
         // Mountain ridge: a long faceted wall of peaks along X, facing -Z.
         // 'envelope' scales height along X (lets us keep the moon side open).
         // ---------------------------------------------------------------------
+        // ---------------------------------------------------------------------
+        // Mountain ridge (Phase 8): a smooth heightfield strip instead of two rows
+        // of quads. 'points' columns along X, 32 rows front-to-back. Each column
+        // has a ridge cross-section (rises to a crest, falls away behind); 2D ridged
+        // noise adds spurs and gullies down the slopes. Shared vertices, so the
+        // normals are smooth. Vertex colour red = snow mask (high + not too steep),
+        // used by StarlitStylized's accent colour.
+        // ---------------------------------------------------------------------
         public static Mesh MountainRidge(int seed, float xMin, float xMax, float peakHeight, float depth, int points, System.Func<float, float> envelope)
         {
-            var mb = new MeshBuilder(1);
+            int cols = points * 2, rows = 32;
             float ox = seed * 31.7f;
-            Vector3[] mid = new Vector3[points + 1];
-            Vector3[] top = new Vector3[points + 1];
-            Vector3[] bas = new Vector3[points + 1];
-            for (int i = 0; i <= points; i++)
+            float Ridged(float x, float y, int octaves)
             {
-                float x = Mathf.Lerp(xMin, xMax, i / (float)points);
-                // ridged noise: sharp peaks instead of round hills
-                float n = 0f, amp = 1f, freq = 0.0035f, norm = 0f;
-                for (int o = 0; o < 4; o++)
+                float n = 0f, amp = 1f, norm = 0f, fx = x, fy = y;
+                for (int o = 0; o < octaves; o++)
                 {
-                    float r = 1f - Mathf.Abs(Mathf.PerlinNoise(x * freq + ox, o * 11.3f + seed) * 2f - 1f);
-                    n += r * r * amp; norm += amp; amp *= 0.5f; freq *= 2.1f;
+                    float r = 1f - Mathf.Abs(Mathf.PerlinNoise(fx + ox, fy + o * 11.3f + seed) * 2f - 1f);
+                    n += r * r * amp; norm += amp; amp *= 0.5f; fx *= 2.1f; fy *= 2.1f;
                 }
-                n /= norm;
-                float h = Mathf.Max(peakHeight * n * envelope(x), 4f);
-                float jitter = (Mathf.PerlinNoise(x * 0.05f, seed) - 0.5f) * depth * 0.3f;
-                bas[i] = new Vector3(x, -20f, 0f);
-                mid[i] = new Vector3(x, h * 0.5f, depth * 0.35f + jitter);
-                top[i] = new Vector3(x, h, depth * 0.7f);
+                return n / norm;
             }
-            for (int i = 0; i < points; i++)
+
+            var verts = new Vector3[(cols + 1) * (rows + 1)];
+            var peaks = new float[cols + 1];
+            for (int i = 0; i <= cols; i++)
             {
-                mb.Quad(0, bas[i], mid[i], mid[i + 1], bas[i + 1], Vector3.back + Vector3.up * 0.3f);
-                mb.Quad(0, mid[i], top[i], top[i + 1], mid[i + 1], Vector3.back + Vector3.up);
+                float x = Mathf.Lerp(xMin, xMax, i / (float)cols);
+                float crestV = 0.55f + 0.18f * (Mathf.PerlinNoise(x * 0.004f, seed * 3.1f) - 0.5f);
+                float peak = Mathf.Max(peakHeight * Ridged(x * 0.0035f, 0f, 4) * envelope(x), 4f);
+                peaks[i] = peak;
+                for (int j = 0; j <= rows; j++)
+                {
+                    float v = j / (float)rows;
+                    // cross-section: steep-ish rise to the crest, gentler fall behind
+                    // (Max(0, ...): cos(pi/2) is a hair below zero, and Pow(negative, 0.9) is NaN)
+                    float profile = v < crestV ? Mathf.Pow(Mathf.Max(0f, Mathf.Sin(Mathf.PI * 0.5f * v / crestV)), 1.6f)
+                                               : Mathf.Pow(Mathf.Max(0f, Mathf.Cos(Mathf.PI * 0.5f * (v - crestV) / (1f - crestV))), 0.9f);
+                    // spurs and gullies running down the slopes
+                    float gully = 0.78f + 0.34f * Ridged(x * 0.012f, v * 2.4f, 3);
+                    float y = Mathf.Lerp(-20f, peak, profile) * Mathf.Lerp(1f, gully, Mathf.Clamp01(profile * 1.4f));
+                    if (j == 0) y = -20f;
+                    verts[i * (rows + 1) + j] = new Vector3(x, y, depth * v);
+                }
             }
-            return mb.ToMesh("Mountains_" + seed);
+            var tris = new List<int>(cols * rows * 6);
+            for (int i = 0; i < cols; i++)
+            for (int j = 0; j < rows; j++)
+            {
+                int a = i * (rows + 1) + j, b = a + rows + 1;
+                tris.Add(a); tris.Add(a + 1); tris.Add(b);
+                tris.Add(a + 1); tris.Add(b + 1); tris.Add(b);
+            }
+            var mesh = new Mesh { name = "Mountains_" + seed, indexFormat = IndexFormat.UInt32 };
+            mesh.vertices = verts;
+            mesh.SetTriangles(tris, 0);
+            // Winding (a, a+1, b): cross(+Z step, +X step) points up and, on the front
+            // slope, toward -Z: the faces look at the viewer (Unity's front = cross(b-a, c-a)).
+            mesh.RecalculateNormals();
+            Vector3[] ns = mesh.normals;
+
+            var colors = new Color[verts.Length];
+            for (int i = 0; i <= cols; i++)
+            for (int j = 0; j <= rows; j++)
+            {
+                int k = i * (rows + 1) + j;
+                float snowLine = peaks[i] * 0.62f + 10f * (Mathf.PerlinNoise(verts[k].x * 0.02f, seed) - 0.5f);
+                float high = Mathf.InverseLerp(snowLine - 12f, snowLine + 6f, verts[k].y);
+                float flat = Mathf.InverseLerp(0.35f, 0.7f, ns[k].y);
+                colors[k] = new Color(Mathf.Clamp01(high) * Mathf.Clamp01(flat * 1.4f), 0f, 0f, 1f);
+            }
+            mesh.colors = colors;
+            mesh.RecalculateBounds();
+            mesh.RecalculateTangents();
+            return mesh;
         }
     }
 }

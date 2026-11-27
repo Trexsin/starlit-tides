@@ -1,6 +1,6 @@
 // BoatController: steers, dashes and floats the paper boat.
 //
-// The boat stays inside a small "play lane" near the middle of the world.
+// The boat stays inside the "play lane" (its size comes from PlayArea).
 // It never really travels forward: the tide carries everything else toward it.
 //
 // - Steering: the velocity eases toward the input, so it feels smooth.
@@ -24,18 +24,16 @@ namespace StarlitTides
         public static event Action OnDash;
         public static event Action<Obstacle> OnHit;
 
-        [Header("Play lane limits (world X and Z)")]
-        public Vector2 laneX = new Vector2(-7f, 7f);
-        public Vector2 laneZ = new Vector2(-3f, 12f);
-
         [Header("Steering")]
-        public float lateralSpeed = 9f;      // left/right
-        public float forwardSpeed = 6f;      // forward/back
+        public float lateralSpeed = 15f;     // left/right (the Phase 8 lane is wider)
+        public float forwardSpeed = 7f;      // forward/back
         public float acceleration = 7f;      // how quickly we reach the input speed
         public float edgeSoftness = 1.2f;    // slow down this close to the lane edge
+        [Tooltip("Bumping the lane edge faster than this (m/s) makes a ripple.")]
+        public float edgeBumpSpeed = 6f;
 
         [Header("Dash")]
-        public float dashSpeed = 24f;
+        public float dashSpeed = 27f;
         public float dashDuration = 0.18f;
         public float dashCooldown = 1.1f;
         public float dashInvulnerability = 0.3f;
@@ -68,6 +66,7 @@ namespace StarlitTides
         float invulnerableUntil;
         Quaternion waveTilt = Quaternion.identity;
         bool sinking;
+        float lastEdgeBump = -10f;
 
         void Awake()
         {
@@ -136,10 +135,25 @@ namespace StarlitTides
             float blend = 1f - Mathf.Exp(-response * dt);
             velocity = Vector3.Lerp(velocity, targetVelocity, blend);
 
+            float halfWidth = PlayArea.HalfWidth;
+            Vector2 laneZ = PlayArea.LaneZ;
+            float sideSpeed = velocity.x;
+
             Vector3 position = transform.position + velocity * dt;
-            position.x = SoftClamp(position.x, laneX.x, laneX.y, ref velocity.x);
+            position.x = SoftClamp(position.x, -halfWidth, halfWidth, ref velocity.x);
             position.z = SoftClamp(position.z, laneZ.x, laneZ.y, ref velocity.z);
             transform.position = position;
+
+            // Steering hard into the channel edge: a soft bump and a glowing ripple,
+            // so the edge feels like a place rather than an invisible wall.
+            bool atEdge = Mathf.Abs(position.x) >= halfWidth - 0.05f && Mathf.Sign(sideSpeed) == Mathf.Sign(position.x);
+            if (atEdge && Mathf.Abs(sideSpeed) > edgeBumpSpeed && Time.time - lastEdgeBump > 0.6f)
+            {
+                lastEdgeBump = Time.time;
+                velocity.x = -Mathf.Sign(position.x) * 2.5f;
+                if (OceanController.Instance != null)
+                    OceanController.Instance.AddRipple(position + Vector3.right * Mathf.Sign(position.x) * 0.8f, 1.6f, 0.9f, 1.2f);
+            }
         }
 
         // Keeps a value inside min..max, and slows the velocity down near the edges.

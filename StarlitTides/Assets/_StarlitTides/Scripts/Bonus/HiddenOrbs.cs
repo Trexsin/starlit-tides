@@ -14,7 +14,6 @@ namespace StarlitTides
         public GameObject revealVfx;
         public Vector2 spawnInterval = new Vector2(7f, 13f);
         public float spawnZ = 112f;
-        public Vector2 laneX = new Vector2(-6f, 6f);
 
         [Header("Reward")]
         public float lightValue = 0.2f;
@@ -54,7 +53,7 @@ namespace StarlitTides
         void SpawnHiddenOrb()
         {
             if (orbPrefab == null) return;
-            Vector3 position = new Vector3(Random.Range(laneX.x, laneX.y), 0f, spawnZ);
+            Vector3 position = new Vector3(Random.Range(-PlayArea.OrbHalfWidth, PlayArea.OrbHalfWidth), 0f, spawnZ);
             Orb orb = PoolManager.Spawn(orbPrefab, position, Quaternion.identity).GetComponent<Orb>();
             orb.SetHidden(true);
             orb.lightValue = lightValue;

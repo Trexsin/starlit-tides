@@ -51,6 +51,11 @@ Shader "Skybox/StarlitNight"
         [HDR] _AuroraColorB ("Aurora Upper Colour", Color) = (1.4, 0.3, 2.0, 1)
         _AuroraDistance ("Aurora Distance", Range(1, 8)) = 3.2
 
+        [Header(Night Clouds)]
+        _NightCloudCover ("Night Cloud Cover", Range(0, 1)) = 0.45
+        _NightCloudColor ("Night Cloud Colour", Color) = (0.04, 0.045, 0.09, 1)
+        [HDR] _CloudLiningColor ("Moonlit Silver Lining", Color) = (1.3, 1.4, 1.75, 1)
+
         [Header(Storm)]
         _CloudColor   ("Storm Cloud Colour", Color) = (0.035, 0.04, 0.06, 1)
         [HDR] _LightningColor ("Lightning Colour", Color) = (2.5, 2.8, 4.0, 1)
@@ -91,6 +96,8 @@ Shader "Skybox/StarlitNight"
                 float4 _AuroraColorA, _AuroraColorB;
                 float  _AuroraDistance;
                 float4 _CloudColor, _LightningColor;
+                float  _NightCloudCover;
+                float4 _NightCloudColor, _CloudLiningColor;
                 float4 _SunsetHorizon, _SunsetMid, _SunsetZenith, _SunColor;
             CBUFFER_END
 
@@ -232,6 +239,27 @@ Shader "Skybox/StarlitNight"
                     sky = lerp(sky, sky * 0.45, _StormAmount);            // darker, heavier sky
                 }
 
+                // ---------- night clouds: drifting layers with moonlit silver linings ----------
+                // Projected on a dome, so they bunch up into soft banks at the horizon.
+                float nc = 0;
+                float3 ncCol = 0;
+                if (_NightCloudCover > 0.001 && y > -0.02)
+                {
+                    float2 cuv = dir.xz / (max(y, 0.0) + 0.18);
+                    float2 wind = float2(_SkyTime * 0.012, _SkyTime * 0.004);
+                    float n = SN_Fbm2(cuv * 0.45 + wind, 5);
+                    float detail = SN_Fbm2(cuv * 1.7 - wind * 2.0, 3);
+                    float shape = n + (detail - 0.5) * 0.25;
+                    float lo = 0.62 - _NightCloudCover * 0.35;
+                    nc = smoothstep(lo, lo + 0.24, shape) * smoothstep(-0.02, 0.14, y) * (1.0 - _SunsetBlend * 0.5);
+                    float toMoon = saturate(dot(dir, normalize(_MoonDirection)));
+                    float thin = 1.0 - saturate((shape - lo) * 3.5);          // cloud edges are thin
+                    float3 cbase = _NightCloudColor.rgb * (0.7 + 0.6 * detail);
+                    // Silver linings: thin cloud edges near the moon light up; thick cores stay dark.
+                    float3 lining = _CloudLiningColor.rgb * (pow(toMoon, 60.0) * 1.3 + pow(toMoon, 10.0) * 0.18 + 0.02) * thin;
+                    ncCol = cbase + lining;
+                }
+
                 // ---------- stars + Milky Way ----------
                 float bandMask;
                 float3 galaxy = MilkyWay(dir, bandMask);
@@ -239,17 +267,19 @@ Shader "Skybox/StarlitNight"
                 float3 stars = StarLayer(dir, 190.0, _StarDensity * (0.35 + bandMask * 0.65), 0.28, 0.0) * 0.6
                              + StarLayer(dir, 75.0, _StarDensity * 0.35, 0.18, 51.0) * 1.6
                              + StarLayer(dir, 330.0, bandMask * _StarDensity, 0.3, 97.0) * 0.4;  // dense stars inside the band
-                float3 night = sky + (stars * _StarBrightness + galaxy) * starVis;
+                float3 night = sky + (stars * _StarBrightness + galaxy) * starVis * (1.0 - nc);
 
                 // ---------- aurora ----------
                 if (_AuroraAmount > 0.001)
-                    night += Aurora(dir) * _AuroraAmount * (1.0 - cloudCover);
+                    night += Aurora(dir) * _AuroraAmount * (1.0 - cloudCover) * (1.0 - nc * 0.75);
 
                 // ---------- moon ----------
                 float disc;
                 float3 moon = Moon(dir, normalize(_MoonDirection), disc);
                 night = lerp(night, 0, disc);               // the moon hides the stars behind it
-                night += moon * (1.0 - _SunsetBlend * 0.7);
+                night += moon * (1.0 - _SunsetBlend * 0.7) * (1.0 - nc * 0.7);   // thin clouds veil the moon
+                night = lerp(night, ncCol, nc * 0.9);
+                night += ncCol * nc * 0.1;
 
                 // ---------- sunset (intro cinematic) ----------
                 float3 col = night;

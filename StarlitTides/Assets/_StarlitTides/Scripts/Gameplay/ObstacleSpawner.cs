@@ -1,4 +1,4 @@
-// ObstacleSpawner: sends rocks, logs and jellyfish down the lane.
+// ObstacleSpawner: sends rocks, logs, jellyfish and sea creatures down the lane.
 //
 // Obstacles come faster as the difficulty goes up, and jellyfish and logs get
 // more common. Two rules keep it fair:
@@ -16,12 +16,13 @@ namespace StarlitTides
         public GameObject[] rockPrefabs;
         public GameObject[] logPrefabs;
         public GameObject[] jellyfishPrefabs;
+        [Tooltip("Manta rays, sea turtles, dolphins (they swim across the lane).")]
+        public GameObject[] creaturePrefabs = new GameObject[0];
 
         public float spawnZ = 112f;
-        public Vector2 laneX = new Vector2(-7.5f, 7.5f);
         [Tooltip("The smallest free gap (metres) that must always stay open.")]
         public float minimumGap = 3.2f;
-        public int prewarmEach = 6;
+        public int prewarmEach = 10;
 
         float timer;
 
@@ -30,6 +31,8 @@ namespace StarlitTides
             foreach (GameObject prefab in rockPrefabs) PoolManager.Prewarm(prefab, prewarmEach);
             foreach (GameObject prefab in logPrefabs) PoolManager.Prewarm(prefab, prewarmEach / 2);
             foreach (GameObject prefab in jellyfishPrefabs) PoolManager.Prewarm(prefab, prewarmEach / 2);
+            if (creaturePrefabs != null)
+                foreach (GameObject prefab in creaturePrefabs) PoolManager.Prewarm(prefab, 2);
             timer = 1f;
         }
 
@@ -44,7 +47,8 @@ namespace StarlitTides
             DifficultyManager difficulty = DifficultyManager.Instance;
             float interval = 1.4f;
             if (difficulty != null) interval = difficulty.ObstacleInterval;
-            timer = interval * Random.Range(0.7f, 1.3f);
+            // A wider lane needs more obstacles to stay just as busy (see PlayArea).
+            timer = interval / PlayArea.DensityScale * Random.Range(0.7f, 1.3f);
 
             GameObject prefab = ChoosePrefab(difficulty);
             if (prefab == null) return;
@@ -53,10 +57,15 @@ namespace StarlitTides
             Obstacle prefabObstacle = prefab.GetComponent<Obstacle>();
             if (prefabObstacle != null) radius = prefabObstacle.radius;
 
+            // Sea creatures start near one side of the lane and swim across it.
+            bool creature = prefabObstacle is SeaCreature;
+
             // Try a few random positions and use the first fair one.
+            float halfWidth = PlayArea.ObstacleHalfWidth;
             for (int attempt = 0; attempt < 6; attempt++)
             {
-                float x = Random.Range(laneX.x, laneX.y);
+                float x = Random.Range(-halfWidth, halfWidth);
+                if (creature) x = (Random.value < 0.5f ? -1f : 1f) * Random.Range(halfWidth * 0.45f, halfWidth);
                 Vector3 position = new Vector3(x, 0f, spawnZ + Random.Range(0f, 6f));
                 if (IsFair(position, radius))
                 {
@@ -70,10 +79,12 @@ namespace StarlitTides
         {
             float jellyChance = 0.2f;
             float logChance = 0.2f;
+            float creatureChance = 0.15f;
             if (difficulty != null)
             {
                 jellyChance = difficulty.JellyfishChance;
                 logChance = difficulty.LogChance;
+                creatureChance = difficulty.CreatureChance;
             }
 
             float roll = Random.value;
@@ -81,6 +92,8 @@ namespace StarlitTides
                 return jellyfishPrefabs[Random.Range(0, jellyfishPrefabs.Length)];
             if (roll < jellyChance + logChance && logPrefabs.Length > 0)
                 return logPrefabs[Random.Range(0, logPrefabs.Length)];
+            if (roll < jellyChance + logChance + creatureChance && creaturePrefabs != null && creaturePrefabs.Length > 0)
+                return creaturePrefabs[Random.Range(0, creaturePrefabs.Length)];
             if (rockPrefabs.Length > 0)
                 return rockPrefabs[Random.Range(0, rockPrefabs.Length)];
             return null;
@@ -120,14 +133,15 @@ namespace StarlitTides
         {
             blocked.Sort((a, b) => a.x.CompareTo(b.x));
 
-            float edge = laneX.x - 1f;   // right edge of everything blocked so far
+            float halfWidth = PlayArea.ObstacleHalfWidth;
+            float edge = -halfWidth - 1f;   // right edge of everything blocked so far
             float largest = 0f;
             foreach (Vector2 piece in blocked)
             {
                 largest = Mathf.Max(largest, piece.x - edge);
                 edge = Mathf.Max(edge, piece.y);
             }
-            largest = Mathf.Max(largest, laneX.y + 1f - edge);
+            largest = Mathf.Max(largest, halfWidth + 1f - edge);
             return largest;
         }
     }

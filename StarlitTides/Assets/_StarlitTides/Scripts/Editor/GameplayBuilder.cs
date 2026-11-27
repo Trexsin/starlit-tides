@@ -41,6 +41,7 @@ namespace StarlitTides.EditorTools
         private static Texture2D _softDot;
         private static Material _glowCyan, _glowGold, _glowWhite;
         private static Mesh _haloQuad;
+        private static Material _reefRock, _reefLichen, _reefGlow, _obstacleRock, _rockLichen;
 
         [MenuItem("Starlit Tides/5. Build Gameplay", priority = 21)]
         public static void BuildMenu()
@@ -66,6 +67,7 @@ namespace StarlitTides.EditorTools
 
             _softDot = SoftDot();
             _haloQuad = SaveAsset(Quad(), "HaloQuad.asset");
+            _reefRock = _reefLichen = _reefGlow = _obstacleRock = _rockLichen = null;
             _glowCyan = GlowMaterial("M_GlowCyan", new Color(0.5f, 3.2f, 3.8f));
             _glowGold = GlowMaterial("M_GlowGold", new Color(3.5f, 2.2f, 0.8f));
             _glowWhite = GlowMaterial("M_GlowWhite", new Color(2.2f, 2.8f, 3.2f));
@@ -90,6 +92,7 @@ namespace StarlitTides.EditorTools
 
             Transform managers = new GameObject("Managers").transform;
             managers.SetParent(root, false);
+            managers.gameObject.AddComponent<PlayArea>();   // lane size: read by the boat, spawners, camera, markers, ocean
             managers.gameObject.AddComponent<StarlitInput>();
             var gm = managers.gameObject.AddComponent<GameManager>();
             gm.boat = boatCtrl;
@@ -122,6 +125,15 @@ namespace StarlitTides.EditorTools
             obstacleSpawner.rockPrefabs = rocks.ToArray();
             obstacleSpawner.logPrefabs = new[] { log };
             obstacleSpawner.jellyfishPrefabs = new[] { jelly };
+
+            // channel edge: glowing buoys and little reefs just outside the lane (Phase 8)
+            var markers = spawners.gameObject.AddComponent<LaneMarkers>();
+            markers.buoyPrefabs = new[] { SavePrefab(BuildBuoy(), PrefabDir + "/ChannelBuoy.prefab") };
+            markers.reefPrefabs = new[]
+            {
+                SavePrefab(BuildReef(0), PrefabDir + "/ChannelReef_1.prefab"),
+                SavePrefab(BuildReef(1), PrefabDir + "/ChannelReef_2.prefab"),
+            };
 
             BuildCameraRig(root, boat.transform);
 
@@ -157,18 +169,14 @@ namespace StarlitTides.EditorTools
             return prefab;
         }
 
+        // Phase 8: stylized shader for every solid material. Emissive ones glow,
+        // the rest are props with an outline (StylizedMaterials).
         private static Material Lit(string name, Color color, float smoothness, Color emission = default)
         {
-            var m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = name };
-            m.SetColor("_BaseColor", color);
-            m.SetFloat("_Smoothness", smoothness);
-            if (emission != default)
-            {
-                m.EnableKeyword("_EMISSION");
-                m.SetColor("_EmissionColor", emission);
-                m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-            }
-            m.enableInstancing = true;
+            StylizedMaterials.Kind kind = emission != default ? StylizedMaterials.Kind.Glow
+                                        : name == "M_ObstacleRock" || name == "M_ReefRock" || name.StartsWith("M_Log") ? StylizedMaterials.Kind.Natural
+                                        : StylizedMaterials.Kind.Prop;
+            var m = StylizedMaterials.Create(name, color, smoothness, kind, emission);
             return SaveAsset(m, name + ".mat");
         }
 
@@ -247,33 +255,114 @@ namespace StarlitTides.EditorTools
         private static Mesh PaperBoatMesh()
         {
             // A classic folded paper boat, ~2 m long, pointing toward +Z.
+            // Every panel is subdivided and gently crumpled (edges stay fixed so the
+            // panels still meet), and the facets stay flat-shaded like folded paper.
             var mb = new MeshBuilder(1);
             Vector3 kBR = new Vector3(0.24f, 0f, 0.55f), kBL = new Vector3(-0.24f, 0f, 0.55f);     // keel corners (bow side)
             Vector3 kSR = new Vector3(0.24f, 0f, -0.55f), kSL = new Vector3(-0.24f, 0f, -0.55f);   // keel corners (stern side)
-            Vector3 rBR = new Vector3(0.36f, 0.42f, 0.5f), rBL = new Vector3(-0.36f, 0.42f, 0.5f); // rim
-            Vector3 rSR = new Vector3(0.36f, 0.42f, -0.5f), rSL = new Vector3(-0.36f, 0.42f, -0.5f);
-            Vector3 bow = new Vector3(0f, 0.5f, 1.05f), stern = new Vector3(0f, 0.5f, -1.05f);
+            Vector3 rBR = new Vector3(0.38f, 0.42f, 0.52f), rBL = new Vector3(-0.38f, 0.42f, 0.52f); // rim
+            Vector3 rSR = new Vector3(0.38f, 0.42f, -0.52f), rSL = new Vector3(-0.38f, 0.42f, -0.52f);
+            Vector3 bow = new Vector3(0f, 0.52f, 1.08f), stern = new Vector3(0f, 0.52f, -1.08f);
+            Vector3 sailTop = new Vector3(0f, 1.18f, 0f);
 
-            void Tri(Vector3 a, Vector3 b, Vector3 c)
+            float Crumple(Vector3 p) =>
+                (Mathf.PerlinNoise(p.x * 7.3f + p.z * 2.1f + 11f, p.y * 7.9f + 3f) - 0.5f) * 0.035f;
+
+            void Tri(Vector3 a, Vector3 b, Vector3 c, Vector2 ua, Vector2 ub, Vector2 uc)
             {
                 Vector3 n = Vector3.Cross(b - a, c - a);
-                mb.Triangle(0, a, b, c, n);
-                mb.Triangle(0, a, c, b, -n);   // paper is two-sided
+                mb.Triangle(0, a, b, c, ua, ub, uc, n);
+                mb.Triangle(0, a, c, b, ua, uc, ub, -n);   // paper is two-sided
             }
-            void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d) { Tri(a, b, c); Tri(a, c, d); }
 
-            Quad(kSR, rSR, rBR, kBR);           // right side
-            Quad(kBL, rBL, rSL, kSL);           // left side
-            Quad(kSL, kSR, kBR, kBL);           // bottom
-            Tri(kBR, rBR, bow); Tri(kBL, bow, rBL); Tri(kBR, bow, kBL);         // bow
-            Tri(kSR, stern, rSR); Tri(kSL, rSL, stern); Tri(kSR, kSL, stern);   // stern
-            // the tall central "sail" fold: two sheets leaning together
-            Tri(new Vector3(0.05f, 0.42f, -0.5f), new Vector3(0.05f, 0.42f, 0.5f), new Vector3(0f, 1.15f, 0f));
-            Tri(new Vector3(-0.05f, 0.42f, -0.5f), new Vector3(-0.05f, 0.42f, 0.5f), new Vector3(0f, 1.15f, 0f));
-            // small side flaps of the fold
-            Tri(rSR, new Vector3(0.05f, 0.42f, -0.5f), new Vector3(0.1f, 0.62f, -0.35f));
-            Tri(rBL, new Vector3(-0.05f, 0.42f, 0.5f), new Vector3(-0.1f, 0.62f, 0.35f));
+            // A triangle split into n*n small facets, displaced along its normal.
+            void Sheet(Vector3 a, Vector3 b, Vector3 c, int n)
+            {
+                Vector3 normal = Vector3.Cross(b - a, c - a).normalized;
+                Vector3 P(int i, int j)
+                {
+                    float u = i / (float)n, v = j / (float)n, w = 1f - u - v;
+                    Vector3 p = a * w + b * u + c * v;
+                    float edge = Mathf.Clamp01(Mathf.Min(u, Mathf.Min(v, w)) * 3f);   // 0 on the edges
+                    return p + normal * Crumple(p) * edge;
+                }
+                Vector2 UV(Vector3 p) => new Vector2(p.x + p.z * 0.6f, p.y + p.z * 0.4f);
+                for (int i = 0; i < n; i++)
+                for (int j = 0; j < n - i; j++)
+                {
+                    Vector3 p0 = P(i, j), p1 = P(i + 1, j), p2 = P(i, j + 1);
+                    Tri(p0, p1, p2, UV(p0), UV(p1), UV(p2));
+                    if (i + j < n - 1)
+                    {
+                        Vector3 p3 = P(i + 1, j + 1);
+                        Tri(p1, p3, p2, UV(p1), UV(p3), UV(p2));
+                    }
+                }
+            }
+            void Panel(Vector3 a, Vector3 b, Vector3 c, Vector3 d, int n) { Sheet(a, b, c, n); Sheet(a, c, d, n); }
+
+            Panel(kSR, rSR, rBR, kBR, 6);          // right side
+            Panel(kBL, rBL, rSL, kSL, 6);          // left side
+            Panel(kSL, kSR, kBR, kBL, 4);          // bottom
+            Sheet(kBR, rBR, bow, 4); Sheet(kBL, bow, rBL, 4); Sheet(kBR, bow, kBL, 3);       // bow
+            Sheet(kSR, stern, rSR, 4); Sheet(kSL, rSL, stern, 4); Sheet(kSR, kSL, stern, 3); // stern
+            // The tall central "sail": two sheets leaning together, each folded down the middle.
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Vector3 a = new Vector3(side * 0.05f, 0.42f, -0.52f), b = new Vector3(side * 0.05f, 0.42f, 0.52f);
+                Vector3 mid = new Vector3(side * 0.09f, 0.78f, 0f);
+                Sheet(a, mid, sailTop, 4); Sheet(mid, b, sailTop, 4); Sheet(a, b, mid, 4);
+            }
+            // Small side flaps of the fold, and the rim's folded-over lip.
+            Sheet(rSR, new Vector3(0.05f, 0.42f, -0.52f), new Vector3(0.11f, 0.64f, -0.34f), 3);
+            Sheet(rBL, new Vector3(-0.05f, 0.42f, 0.52f), new Vector3(-0.11f, 0.64f, 0.34f), 3);
+            foreach (float side in new[] { -1f, 1f })
+                Panel(new Vector3(side * 0.38f, 0.42f, -0.52f), new Vector3(side * 0.38f, 0.42f, 0.52f),
+                      new Vector3(side * 0.31f, 0.36f, 0.5f), new Vector3(side * 0.31f, 0.36f, -0.5f), 3);
             return mb.ToMesh("PaperBoat");
+        }
+
+        // Off-white paper: soft mottling, fine fibres and faint fold creases.
+        private static Texture2D PaperTexture()
+        {
+            const string path = Gen + "/T_Paper.png";
+            const int s = 512;
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, true);
+            var px = new Color32[s * s];
+            var rng = new System.Random(5);
+            float[] fibre = new float[s * s];
+            for (int f = 0; f < 900; f++)
+            {
+                float x = (float)rng.NextDouble() * s, y = (float)rng.NextDouble() * s;
+                float ang = (float)rng.NextDouble() * Mathf.PI, len = 6f + (float)rng.NextDouble() * 18f;
+                float dark = 0.03f + (float)rng.NextDouble() * 0.05f;
+                for (int k = 0; k < len; k++)
+                {
+                    int xi = ((int)(x + Mathf.Cos(ang) * k) % s + s) % s, yi = ((int)(y + Mathf.Sin(ang) * k) % s + s) % s;
+                    fibre[yi * s + xi] = Mathf.Max(fibre[yi * s + xi], dark);
+                }
+            }
+            for (int y = 0; y < s; y++)
+            for (int x = 0; x < s; x++)
+            {
+                float u = x / (float)s, v = y / (float)s;
+                float mottle = Mathf.PerlinNoise(u * 6f + 3f, v * 6f + 7f) * 0.06f + Mathf.PerlinNoise(u * 40f, v * 40f) * 0.03f;
+                float crease = Mathf.Exp(-Mathf.Pow((Mathf.Repeat(u + v * 0.5f, 0.5f) - 0.25f) / 0.004f, 2f)) * 0.08f
+                             + Mathf.Exp(-Mathf.Pow((Mathf.Repeat(v * 1.3f, 0.33f) - 0.16f) / 0.003f, 2f)) * 0.05f;
+                float k = 1f - mottle - fibre[y * s + x] - crease;
+                px[y * s + x] = new Color(0.93f * k, 0.9f * k, 0.83f * k, 1f);
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+            File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            var imp = (TextureImporter)AssetImporter.GetAtPath(path);
+            imp.wrapMode = TextureWrapMode.Repeat;
+            imp.anisoLevel = 8;
+            imp.filterMode = FilterMode.Trilinear;
+            imp.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         }
 
         private static GameObject BuildBoat()
@@ -288,7 +377,10 @@ namespace StarlitTides.EditorTools
 
             Transform visual = new GameObject("Visual").transform;
             visual.SetParent(root.transform, false);
-            Material paper = Lit("M_Paper", new Color(0.96f, 0.93f, 0.86f), 0.25f, new Color(3.2f, 2.3f, 1.2f));
+            Material paper = Lit("M_Paper", Color.white, 0.18f, new Color(0.5f, 0.36f, 0.19f));
+            paper.SetTexture("_BaseMap", PaperTexture());
+            paper.SetTextureScale("_BaseMap", new Vector2(1.6f, 1.6f));
+            EditorUtility.SetDirty(paper);
             GameObject hull = MeshChild("Paper Hull", visual, SaveAsset(PaperBoatMesh(), "PaperBoat.asset"), paper);
             hull.transform.localScale = Vector3.one * 1.45f;
 
@@ -304,7 +396,8 @@ namespace StarlitTides.EditorTools
             halo.AddComponent<FaceCamera>();
             halo.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
 
-            Light light = AddLight(root.transform, new Vector3(0f, 1.8f, -0.4f), new Color(1f, 0.86f, 0.62f), 3.5f, 14f);
+            // Raised and set back so it lights the sea around the boat without blowing out the paper.
+            Light light = AddLight(root.transform, new Vector3(0f, 2.6f, -1.1f), new Color(1f, 0.82f, 0.56f), 5f, 20f);
 
             var disturber = root.AddComponent<WaterDisturber>();
             disturber.radius = 1.9f; disturber.strength = 0.6f;
@@ -385,6 +478,113 @@ namespace StarlitTides.EditorTools
         }
 
         // ==================================================================
+        // CHANNEL MARKERS (Phase 8): decoration along the lane edges
+        // ==================================================================
+        // A rounded channel buoy: a half-sunk float, a moon-white band, a thin
+        // mast and a breathing cyan lamp with a soft halo. No collider.
+        private static GameObject BuildBuoy()
+        {
+            var root = new GameObject("ChannelBuoy");
+            Transform visual = new GameObject("Visual").transform;
+            visual.SetParent(root.transform, false);
+            visual.localScale = Vector3.one * 1.3f;   // a touch bigger so it reads from the camera
+
+            var mb = new MeshBuilder(2);
+            mb.SmoothGroup = 1;   // Phase 8: round, smooth float; crisp caps
+            mb.Cylinder(0, new Vector3(0f, -0.55f, 0f), 0.42f, 0.62f, 0.45f, 20, false, true);     // underwater skirt
+            mb.Cylinder(1, new Vector3(0f, -0.10f, 0f), 0.62f, 0.62f, 0.22f, 20, false, false);    // white band
+            mb.Cylinder(0, new Vector3(0f, 0.12f, 0f), 0.62f, 0.30f, 0.42f, 20, true, false);      // shoulder
+            mb.SmoothGroup = 2;
+            mb.Cylinder(0, new Vector3(0f, 0.50f, 0f), 0.07f, 0.06f, 1.25f, 10, true, false);      // mast
+            mb.SmoothGroup = 3;
+            mb.Cylinder(1, new Vector3(0f, 1.70f, 0f), 0.20f, 0.20f, 0.06f, 14, true, true);       // lamp cap
+            Mesh body = SaveAsset(mb.ToMesh("ChannelBuoy"), "ChannelBuoy.asset");
+            Material bodyMat = Lit("M_BuoyBody", new Color(0.13f, 0.17f, 0.30f), 0.55f);
+            Material bandMat = Lit("M_BuoyBand", new Color(0.72f, 0.78f, 0.90f), 0.4f);
+            MeshChild("Body", visual, body, bodyMat, bandMat);
+
+            Transform glow = new GameObject("Glow").transform;
+            glow.SetParent(visual, false);
+            glow.localPosition = new Vector3(0f, 1.52f, 0f);
+            var lampMb = new MeshBuilder(1);
+            ProcMesh.Icosphere(lampMb, 0, Vector3.zero, 0.16f, 2, 5, 0f);
+            Mesh lampMesh = SaveAsset(lampMb.ToMesh("BuoyLamp"), "BuoyLamp.asset");
+            Material lampMat = Lit("M_BuoyLamp", new Color(0.3f, 0.9f, 0.85f), 0.8f, new Color(0.5f, 3.2f, 2.8f));
+            GameObject lamp = MeshChild("Lamp", glow, lampMesh, lampMat);
+            lamp.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+            GameObject halo = MeshChild("Halo", glow, _haloQuad, _glowCyan);
+            halo.transform.localScale = Vector3.one * 2.4f;
+            halo.AddComponent<FaceCamera>();
+            halo.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+
+            var marker = root.AddComponent<LaneMarker>();
+            marker.glow = glow;
+            marker.floatOffset = -0.05f; marker.bobAmplitude = 0.08f; marker.bobSpeed = 1.3f;
+            marker.followWaves = 1f; marker.rockAngle = 7f;
+            return root;
+        }
+
+        // A little reef: a few half-sunk rocks crusted with glowing cyan lichen.
+        private static GameObject BuildReef(int variant)
+        {
+            var root = new GameObject("ChannelReef_" + (variant + 1));
+            Transform visual = new GameObject("Visual").transform;
+            visual.SetParent(root.transform, false);
+
+            // shared by both reef variants, made fresh on each build
+            if (_reefRock == null)
+            {
+                _reefRock = Lit("M_ReefRock", new Color(0.17f, 0.22f, 0.30f), 0.35f);
+                StylizedMaterials.SetAccent(_reefRock, new Color(0.14f, 0.3f, 0.3f));
+            }
+            if (_reefLichen == null) _reefLichen = Lit("M_ReefLichen", new Color(0.25f, 0.8f, 0.75f), 0.6f, new Color(0.3f, 2.2f, 2.0f));
+            if (_reefGlow == null) _reefGlow = GlowMaterial("M_GlowReef", new Color(0.2f, 1.1f, 1.25f));
+            Material rockMat = _reefRock, lichenMat = _reefLichen;
+
+            var rng = new System.Random(4100 + variant * 31);
+            float R(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+            int rocks = variant == 0 ? 3 : 4;
+            var lichen = new MeshBuilder(1);
+            for (int i = 0; i < rocks; i++)
+            {
+                float radius = i == 0 ? R(0.9f, 1.2f) : R(0.45f, 0.8f);
+                Mesh rock = SaveAsset(ProcMesh.Rock(4200 + variant * 10 + i, radius, 0.4f, new Vector3(1.2f, R(0.8f, 1.2f), 1.1f), 3), "ReefRock_" + variant + "_" + i + ".asset");
+                float a = i * 2.4f + R(0f, 0.6f);
+                Vector3 pos = i == 0 ? Vector3.zero : new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * R(1.0f, 1.6f);
+                GameObject g = MeshChild("Rock_" + i, visual, rock, rockMat);
+                g.transform.localPosition = pos + Vector3.down * radius * 0.35f;
+                g.transform.localRotation = Quaternion.Euler(0f, R(0f, 360f), 0f);
+
+                // glowing lichen dots on the top half of each rock
+                int dots = 5 + rng.Next(4);
+                for (int d = 0; d < dots; d++)
+                {
+                    float az = R(0f, Mathf.PI * 2f), el = R(0.25f, 1.2f);
+                    Vector3 dir = new Vector3(Mathf.Cos(az) * Mathf.Cos(el), Mathf.Sin(el), Mathf.Sin(az) * Mathf.Cos(el));
+                    Vector3 c = g.transform.localPosition + Vector3.Scale(dir, new Vector3(1.15f, 0.9f, 1.05f)) * radius * 0.92f;
+                    ProcMesh.Icosphere(lichen, 0, c, R(0.05f, 0.11f), 1, 4300 + d, 0.1f);
+                }
+            }
+            Mesh lichenMesh = SaveAsset(lichen.ToMesh("ReefLichen_" + variant), "ReefLichen_" + variant + ".asset");
+            GameObject lg = MeshChild("Lichen", visual, lichenMesh, lichenMat);
+            lg.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+
+            Transform glow = new GameObject("Glow").transform;
+            glow.SetParent(visual, false);
+            glow.localPosition = new Vector3(0f, 0.3f, 0f);
+            GameObject halo = MeshChild("Halo", glow, _haloQuad, _reefGlow);
+            halo.transform.localScale = Vector3.one * 4.2f;
+            halo.AddComponent<FaceCamera>();
+            halo.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+
+            var marker = root.AddComponent<LaneMarker>();
+            marker.glow = glow;
+            marker.pulseSpeed = 0.8f; marker.pulseAmount = 0.15f;
+            marker.floatOffset = -0.15f; marker.bobAmplitude = 0.02f; marker.followWaves = 0.25f; marker.rockAngle = 0f;
+            return root;
+        }
+
+        // ==================================================================
         // OBSTACLES
         // ==================================================================
         private static GameObject BuildRock(int index)
@@ -392,9 +592,34 @@ namespace StarlitTides.EditorTools
             var root = new GameObject("Rock_" + (index + 1));
             Transform visual = new GameObject("Visual").transform;
             visual.SetParent(root.transform, false);
-            Mesh mesh = SaveAsset(ProcMesh.Rock(2000 + index * 7, 1.25f, 0.42f, new Vector3(1.25f, 1.05f + index * 0.12f, 1.15f)), "ObstacleRock_" + index + ".asset");
-            Material mat = AssetDatabase.LoadAssetAtPath<Material>(Gen + "/M_ObstacleRock.mat") ?? Lit("M_ObstacleRock", new Color(0.26f, 0.27f, 0.32f), 0.25f);
+            Mesh mesh = SaveAsset(ProcMesh.Rock(2000 + index * 7, 1.25f, 0.42f, new Vector3(1.25f, 1.05f + index * 0.12f, 1.15f), 4), "ObstacleRock_" + index + ".asset");
+            if (_obstacleRock == null)
+            {
+                _obstacleRock = Lit("M_ObstacleRock", new Color(0.26f, 0.27f, 0.32f), 0.25f);   // shared by the 3 rocks
+                StylizedMaterials.SetAccent(_obstacleRock, new Color(0.16f, 0.25f, 0.26f));      // moss on the tops (ProcMesh.Rock mask)
+                _rockLichen = Lit("M_RockLichen", new Color(0.9f, 0.45f, 0.4f), 0.5f, new Color(1.5f, 0.42f, 0.36f));
+            }
+            Material mat = _obstacleRock;
             MeshChild("Mesh", visual, mesh, mat);
+
+            // Phase 8: a few warm coral lichen dots on the upper half. In the art
+            // direction warm coral/pink means "danger", cyan means "collect".
+            {
+                var lichen = new MeshBuilder(1);
+                Vector3[] rv = mesh.vertices, rn = mesh.normals;
+                var rng = new System.Random(3100 + index);
+                for (int tries = 0, placed = 0; tries < 400 && placed < 9; tries++)
+                {
+                    int k = rng.Next(rv.Length);
+                    if (rn[k].y < 0.35f || rv[k].y < 0.05f) continue;
+                    lichen.SmoothGroup = 1 + placed;
+                    ProcMesh.Icosphere(lichen, 0, rv[k] + rn[k] * 0.02f, 0.05f + (float)rng.NextDouble() * 0.06f, 1, 900 + placed, 0.1f);
+                    placed++;
+                }
+                Mesh lichenMesh = SaveAsset(lichen.ToMesh("RockLichen_" + index), "RockLichen_" + index + ".asset");
+                GameObject lg = MeshChild("Lichen", visual, lichenMesh, _rockLichen);
+                lg.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.Off;
+            }
 
             var col = root.AddComponent<SphereCollider>();
             col.radius = 1.15f; col.center = new Vector3(0f, 0.3f, 0f); col.isTrigger = true;
@@ -415,15 +640,37 @@ namespace StarlitTides.EditorTools
             visual.SetParent(root.transform, false);
 
             var mb = new MeshBuilder(2);    // 0 bark, 1 cut wood
+            // Phase 8: a lofted trunk (20 sides x 10 rings) with bark grooves, a gentle
+            // bulge and smooth shading; crisp cut ends; smooth branch stubs.
             mb.Transform = Matrix4x4.TRS(new Vector3(-2.25f, 0f, 0f), Quaternion.Euler(0f, 0f, -90f), Vector3.one);
-            mb.Cylinder(0, Vector3.zero, 0.38f, 0.33f, 4.5f, 9, false, false, 6f);
-            mb.Cylinder(1, Vector3.zero, 0.38f, 0.38f, 0.001f, 9, false, true);
-            mb.Cylinder(1, Vector3.up * 4.5f, 0.33f, 0.33f, 0.001f, 9, true, false);
-            mb.Transform = Matrix4x4.identity;
+            const int sides = 20, rings = 10;
+            const float length = 4.5f;
+            float LogRadius(float t, float a) => Mathf.Lerp(0.38f, 0.33f, t) * (1f + 0.06f * Mathf.Sin(t * Mathf.PI))
+                                                 * (1f + 0.035f * Mathf.Sin(a * 7f + t * 2f) + 0.02f * Mathf.Sin(a * 13f));
+            Vector3 LogPoint(float t, float a) => new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * LogRadius(t, a) + Vector3.up * (t * length);
+            mb.SmoothGroup = 1;
+            for (int r = 0; r < rings; r++)
+            for (int k = 0; k < sides; k++)
+            {
+                float t0 = r / (float)rings, t1 = (r + 1) / (float)rings;
+                float a0 = k / (float)sides * Mathf.PI * 2f, a1 = (k + 1) / (float)sides * Mathf.PI * 2f;
+                Vector3 outward = new Vector3(Mathf.Cos((a0 + a1) * 0.5f), 0f, Mathf.Sin((a0 + a1) * 0.5f));
+                mb.Quad(0, LogPoint(t0, a0), LogPoint(t1, a0), LogPoint(t1, a1), LogPoint(t0, a1), outward);
+            }
+            mb.SmoothGroup = 0;
+            for (int k = 0; k < sides; k++)   // cut ends (end grain)
+            {
+                float a0 = k / (float)sides * Mathf.PI * 2f, a1 = (k + 1) / (float)sides * Mathf.PI * 2f;
+                mb.Triangle(1, Vector3.zero, LogPoint(0f, a0), LogPoint(0f, a1), Vector3.down);
+                mb.Triangle(1, Vector3.up * length, LogPoint(1f, a0), LogPoint(1f, a1), Vector3.up);
+            }
+            mb.SmoothGroup = 2;
             mb.Transform = Matrix4x4.TRS(new Vector3(0.6f, 0.2f, 0f), Quaternion.Euler(0f, 0f, -35f), Vector3.one);
-            mb.Cylinder(0, Vector3.zero, 0.12f, 0.06f, 0.9f, 6, true);
+            mb.Cylinder(0, Vector3.zero, 0.12f, 0.06f, 0.9f, 10, true);
+            mb.SmoothGroup = 3;
             mb.Transform = Matrix4x4.TRS(new Vector3(-1.1f, 0.1f, 0.15f), Quaternion.Euler(40f, 0f, 20f), Vector3.one);
-            mb.Cylinder(0, Vector3.zero, 0.1f, 0.05f, 0.7f, 6, true);
+            mb.Cylinder(0, Vector3.zero, 0.1f, 0.05f, 0.7f, 10, true);
+            mb.SmoothGroup = 0;
             Mesh mesh = SaveAsset(mb.ToMesh("DriftLog"), "DriftLog.asset");
             Material bark = Lit("M_LogBark", new Color(0.23f, 0.16f, 0.11f), 0.15f);
             Material wood = Lit("M_LogCut", new Color(0.55f, 0.42f, 0.28f), 0.1f);
@@ -446,7 +693,7 @@ namespace StarlitTides.EditorTools
         {
             // Smooth bell (dome with a wavy rim) + ribbon tentacles hanging below y = 0.
             var verts = new List<Vector3>(); var norms = new List<Vector3>(); var tris = new List<int>();
-            int rings = 7, segs = 20;
+            int rings = 14, segs = 32;   // Phase 8: smoother bell silhouette (was 7 x 20)
             float r = 0.6f, h = 0.8f;
             for (int i = 0; i <= rings; i++)
             {
@@ -665,25 +912,38 @@ namespace StarlitTides.EditorTools
             }
             if (cam.GetComponent<CinemachineBrain>() == null) cam.gameObject.AddComponent<CinemachineBrain>();
 
-            // look target: ahead-left of the boat, so the village and lighthouse stay in frame
-            var look = new GameObject("Camera Look Target").transform;
-            look.SetParent(boat, false);
-            look.localPosition = new Vector3(-3.5f, 1f, 22f);
+            // Phase 8 framing. The camera follows an anchor that copies only about
+            // half of the boat's sideways movement (CameraAnchor), so the boat moves
+            // across the screen and the channel edges stay in view. It sits higher
+            // and uses a narrower lens than before (48 deg instead of 58 deg), so the
+            // wide lane fills the picture instead of a thin strip in the middle.
+            var anchorGo = new GameObject("Camera Anchor");
+            anchorGo.transform.SetParent(root, false);
+            anchorGo.transform.position = new Vector3(boat.position.x * 0.55f, 0f, boat.position.z);
+            var anchor = anchorGo.AddComponent<CameraAnchor>();
+            anchor.boat = boat;
 
+            var look = new GameObject("Camera Look Target").transform;
+            look.SetParent(anchorGo.transform, false);
+            look.localPosition = new Vector3(0f, 1f, 34f);
+
+            Vector3 offset = new Vector3(0f, 11f, -19f);
             var go = new GameObject("CM Gameplay Camera");
             go.transform.SetParent(root, false);
-            go.transform.position = boat.position + new Vector3(2f, 5.2f, -11f);
+            go.transform.position = anchorGo.transform.position + offset;
             var cm = go.AddComponent<CinemachineCamera>();
-            cm.Follow = boat;
+            cm.Follow = anchorGo.transform;
             cm.LookAt = look;
             cm.Priority.Enabled = true;
             cm.Priority.Value = 10;
             var lens = LensSettings.Default;
-            lens.FieldOfView = 54f; lens.NearClipPlane = 0.3f; lens.FarClipPlane = 3000f;
+            lens.FieldOfView = 48f; lens.NearClipPlane = 0.3f; lens.FarClipPlane = 3000f;
             cm.Lens = lens;
+            var fit = go.AddComponent<CameraAspectFit>();   // same horizontal view on 16:9, 16:10 and 21:9
+            fit.referenceVerticalFov = 48f;
 
             var follow = go.AddComponent<CinemachineFollow>();
-            follow.FollowOffset = new Vector3(2f, 5.2f, -11f);
+            follow.FollowOffset = offset;
             follow.TrackerSettings.BindingMode = BindingMode.WorldSpace;
             follow.TrackerSettings.PositionDamping = new Vector3(0.9f, 0.6f, 0.9f);
 

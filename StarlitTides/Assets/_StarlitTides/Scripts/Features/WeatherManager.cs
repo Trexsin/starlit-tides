@@ -147,7 +147,7 @@ namespace StarlitTides
             while (sparkTimer <= 0f)
             {
                 sparkTimer += 1f;
-                Vector3 spot = new Vector3(UnityEngine.Random.Range(-14f, 14f), 0f, UnityEngine.Random.Range(0f, 45f));
+                Vector3 spot = new Vector3(UnityEngine.Random.Range(-1f, 1f) * (PlayArea.ObstacleHalfWidth + 6f), 0f, UnityEngine.Random.Range(0f, 60f));
                 ocean.AddRipple(spot, UnityEngine.Random.Range(0.4f, 0.9f), 1.2f, 0.8f);
             }
         }

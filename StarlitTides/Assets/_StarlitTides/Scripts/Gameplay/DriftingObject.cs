@@ -23,6 +23,8 @@ namespace StarlitTides
         public Vector3 extraDrift = Vector3.zero;
         [Tooltip("Remove the object when it goes behind this Z.")]
         public float despawnZ = -28f;
+        [Tooltip("Remove the object when it drifts further than this from the lane centre (X). Scenery far out at sea (Phase 8) uses a bigger value.")]
+        public float despawnX = 45f;
         [Tooltip("1 = ride the waves fully, 0 = stay at a fixed height.")]
         [Range(0f, 1f)] public float followWaves = 1f;
 
@@ -76,7 +78,7 @@ namespace StarlitTides
             Tick(dt);
 
             // 3. Gone past the camera (or far off to the side)? Back to the pool.
-            if (position.z < despawnZ || Mathf.Abs(position.x) > 45f) Despawn();
+            if (position.z < despawnZ || Mathf.Abs(position.x) > despawnX) Despawn();
         }
 
         public void Despawn()

@@ -660,6 +660,10 @@ namespace StarlitTides.EditorTools
             lens.FarClipPlane = 3000f;
             cam.Lens = lens;
             MenuCamera orbit = go.AddComponent<MenuCamera>();
+            // The bay was turned so the boat sails out to sea (WorldLayout): turn the orbit with it.
+            orbit.orbitCentre = WorldLayout.ToWorld(orbit.orbitCentre);
+            orbit.lookAt = WorldLayout.ToWorld(orbit.lookAt);
+            orbit.baseAngle += WorldLayout.Yaw;
 
             VolumeProfile profile = ScriptableObject.CreateInstance<VolumeProfile>();
             SaveAsset(profile, Generated + "/PP_MenuDepthOfField.asset");
@@ -724,15 +728,28 @@ namespace StarlitTides.EditorTools
                 a.supportsCameraDepthTexture = true;     // the ocean needs these two
                 a.supportsCameraOpaqueTexture = true;
                 a.supportsHDR = true;                    // bloom needs HDR
-                a.renderScale = i == 0 ? 0.8f : 1f;
-                a.msaaSampleCount = i == 0 ? 1 : i == 1 ? 2 : 4;
-                a.mainLightShadowmapResolution = i == 0 ? 512 : i == 1 ? 1024 : 2048;
-                a.shadowDistance = i == 0 ? 40f : i == 1 ? 70f : 100f;
+                // Sharpness first: native resolution on Medium/High, and Low upscales
+                // with FSR (which sharpens) instead of plain bilinear blur.
+                a.renderScale = i == 0 ? 0.85f : 1f;
+                a.upscalingFilter = i == 0 ? UpscalingFilterSelection.FSR : UpscalingFilterSelection.Auto;
+                a.fsrOverrideSharpness = true;
+                a.fsrSharpness = 0.9f;
+                a.msaaSampleCount = i == 0 ? 1 : 4;      // Low uses SMAA on the camera instead
+                // 64-bit HDR stops colour banding in the dark night gradients (sky, deep water).
+                a.hdrColorBufferPrecision = i == 2 ? HDRColorBufferPrecision._64Bits : HDRColorBufferPrecision._32Bits;
+                a.mainLightShadowmapResolution = i == 0 ? 1024 : i == 1 ? 2048 : 4096;
+                a.shadowDistance = i == 0 ? 40f : i == 1 ? 70f : 110f;
                 a.shadowCascadeCount = i == 0 ? 1 : i == 1 ? 2 : 4;
                 SerializedObject so = new SerializedObject(a);
                 SerializedProperty soft = so.FindProperty("m_SoftShadowsSupported");
                 if (soft != null) soft.boolValue = i > 0;
+                SerializedProperty softQuality = so.FindProperty("m_SoftShadowQuality");
+                if (softQuality != null) softQuality.intValue = i == 2 ? 3 : 2;   // High / Medium
+                // Full-resolution copy of the scene for the ocean's refraction (no 2x blur).
+                SerializedProperty downsample = so.FindProperty("m_OpaqueDownsampling");
+                if (downsample != null) downsample.intValue = i == 0 ? 1 : 0;
                 so.ApplyModifiedPropertiesWithoutUndo();
+                AddSharpenPass(a);
                 EditorUtility.SetDirty(a);
                 assets[i] = a;
             }
@@ -750,21 +767,77 @@ namespace StarlitTides.EditorTools
                 level.FindPropertyRelative("customRenderPipeline").objectReferenceValue = assets[i];
                 SetIfExists(level, "vSyncCount", 1);
                 SetIfExists(level, "antiAliasing", 0);
-                SetIfExists(level, "anisotropicTextures", i);
+                SetIfExists(level, "anisotropicTextures", i == 0 ? 1 : 2);   // forced on for Medium/High
                 SetIfExists(level, "particleRaycastBudget", i == 0 ? 64 : i == 1 ? 256 : 1024);
                 SetIfExists(level, "realtimeReflectionProbes", 1);
                 SetFloatIfExists(level, "lodBias", i == 0 ? 0.7f : i == 1 ? 1f : 1.5f);
                 SerializedProperty excluded = level.FindPropertyRelative("excludedTargetPlatforms");
                 if (excluded != null) excluded.ClearArray();
             }
-            // Medium is the default for PC (safe for mid-range laptops).
+            // High is the default: the game is built to look its best (Low/Medium stay in Settings).
             SerializedProperty defaults = quality.FindProperty("m_PerPlatformDefaultQuality");
             if (defaults != null)
                 for (int i = 0; i < defaults.arraySize; i++)
-                    defaults.GetArrayElementAtIndex(i).FindPropertyRelative("second").intValue = 1;
+                    defaults.GetArrayElementAtIndex(i).FindPropertyRelative("second").intValue = 2;
             quality.FindProperty("m_CurrentQuality").intValue = 2;   // High while editing
             quality.ApplyModifiedPropertiesWithoutUndo();
             AssetDatabase.SaveAssets();
+        }
+
+        // Adds the contrast-adaptive sharpening pass (StarlitSharpen.shader) to the
+        // renderer as a URP "Full Screen Pass" feature, after post-processing.
+        // SettingsManager sets its strength per quality level.
+        static void AddSharpenPass(UniversalRenderPipelineAsset asset)
+        {
+            // The atmosphere (fog, moon scattering, god rays) goes in BEFORE post-processing
+            // so bloom and tonemapping treat it like real light; sharpening comes last.
+            AddFullScreenPass(asset, "Starlit Atmosphere", "Hidden/StarlitTides/Atmosphere", "M_Atmosphere",
+                FullScreenPassRendererFeature.InjectionPoint.BeforeRenderingPostProcessing, ScriptableRenderPassInput.Color | ScriptableRenderPassInput.Depth);
+            AddFullScreenPass(asset, "Starlit Sharpen", "Hidden/StarlitTides/Sharpen", "M_Sharpen",
+                FullScreenPassRendererFeature.InjectionPoint.AfterRenderingPostProcessing, ScriptableRenderPassInput.Color);
+        }
+
+        static void AddFullScreenPass(UniversalRenderPipelineAsset asset, string featureName, string shaderName, string materialName,
+                                      FullScreenPassRendererFeature.InjectionPoint injection, ScriptableRenderPassInput requirements)
+        {
+            Shader shader = Shader.Find(shaderName);
+            if (shader == null) { Debug.LogWarning("[Starlit Tides] " + shaderName + " missing, " + featureName + " skipped."); return; }
+            string matPath = Generated + "/" + materialName + ".mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (material == null)
+            {
+                material = new Material(shader) { name = materialName };
+                AssetDatabase.CreateAsset(material, matPath);
+            }
+
+            SerializedProperty list = new SerializedObject(asset).FindProperty("m_RendererDataList");
+            for (int r = 0; r < list.arraySize; r++)
+            {
+                ScriptableRendererData data = list.GetArrayElementAtIndex(r).objectReferenceValue as ScriptableRendererData;
+                if (data == null) continue;
+                bool exists = false;
+                foreach (ScriptableRendererFeature f in data.rendererFeatures)
+                    if (f != null && f.name == featureName) { exists = true; ((FullScreenPassRendererFeature)f).passMaterial = material; }
+                if (exists) continue;
+
+                FullScreenPassRendererFeature feature = ScriptableObject.CreateInstance<FullScreenPassRendererFeature>();
+                feature.name = featureName;
+                feature.passMaterial = material;
+                feature.injectionPoint = injection;
+                feature.fetchColorBuffer = true;
+                feature.requirements = requirements;
+                AssetDatabase.AddObjectToAsset(feature, data);
+                data.rendererFeatures.Add(feature);
+
+                SerializedObject dataSo = new SerializedObject(data);
+                SerializedProperty map = dataSo.FindProperty("m_RendererFeatureMap");
+                AssetDatabase.TryGetGUIDAndLocalFileIdentifier(feature, out string guid, out long localId);
+                map.arraySize = data.rendererFeatures.Count;
+                map.GetArrayElementAtIndex(map.arraySize - 1).longValue = localId;
+                dataSo.ApplyModifiedPropertiesWithoutUndo();
+                data.SetDirty();
+                EditorUtility.SetDirty(data);
+            }
         }
 
         static void SetIfExists(SerializedProperty parent, string name, int value)
