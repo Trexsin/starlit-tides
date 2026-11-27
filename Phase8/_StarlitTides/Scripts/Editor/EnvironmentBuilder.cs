@@ -1413,6 +1413,64 @@ namespace StarlitTides.EditorTools
         }
 
         // ==================================================================
+        // COLOUR GRADING LUT (Phase 8)
+        // ------------------------------------------------------------------
+        // A 32x32x32 colour cube stored as a 1024x32 strip: 32 slices side by
+        // side, one per blue level; inside a slice x = red, y = green. URP's
+        // ColorLookup feeds every pixel's (sRGB) colour through it, so whatever
+        // Grade() does to one colour happens to the whole picture, for the cost
+        // of one texture lookup.
+        // ==================================================================
+        private static Texture2D StarlitGradeLut()
+        {
+            const int n = 32;
+            var tex = new Texture2D(n * n, n, TextureFormat.RGBA32, false, true);
+            for (int b = 0; b < n; b++)
+            for (int g = 0; g < n; g++)
+            for (int r = 0; r < n; r++)
+            {
+                var c = new Color(r / (n - 1f), g / (n - 1f), b / (n - 1f));
+                tex.SetPixel(b * n + r, g, Grade(c));
+            }
+            tex.Apply(false);
+            string full = Gen + "/Textures/T_StarlitGradeLUT.png";
+            File.WriteAllBytes(full, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(full, ImportAssetOptions.ForceUpdate);
+            var imp = (TextureImporter)AssetImporter.GetAtPath(full);
+            imp.sRGBTexture = false;                                   // values are used as-is
+            imp.mipmapEnabled = false;
+            imp.wrapMode = TextureWrapMode.Clamp;
+            imp.filterMode = FilterMode.Bilinear;
+            imp.textureCompression = TextureImporterCompression.Uncompressed;   // compression would band the colours
+            imp.npotScale = TextureImporterNPOTScale.None;
+            imp.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(full);
+        }
+
+        // The "Moonlit Storybook" grade, on one sRGB colour.
+        private static Color Grade(Color c)
+        {
+            float lum = c.r * 0.2126f + c.g * 0.7152f + c.b * 0.0722f;
+            float shadows = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(lum / 0.45f));
+            float highlights = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((lum - 0.55f) / 0.45f));
+            // shadows toward TEAL (the night grade is already cool and blue, so the
+            // LUT adds green, not more blue), highlights toward warm moonlight/lantern gold
+            c.r += shadows * -0.006f + highlights * 0.035f;
+            c.g += shadows * 0.020f + highlights * 0.012f;
+            c.b += shadows * 0.008f + highlights * -0.030f;
+            // a little extra saturation in the mid-tones (the glow colours live there)
+            float mid = 1f - Mathf.Abs(lum - 0.5f) * 2f;
+            float sat = 1f + 0.08f * Mathf.Clamp01(mid);
+            c.r = lum + (c.r - lum) * sat; c.g = lum + (c.g - lum) * sat; c.b = lum + (c.b - lum) * sat;
+            // gentle S-curve for depth
+            c.r = Mathf.Lerp(c.r, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(c.r)), 0.18f);
+            c.g = Mathf.Lerp(c.g, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(c.g)), 0.18f);
+            c.b = Mathf.Lerp(c.b, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(c.b)), 0.18f);
+            return new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), 1f);
+        }
+
+        // ==================================================================
         // POST-PROCESSING - the "dreamy neon night" look
         // ==================================================================
         private static void BuildPostProcessing()
@@ -1448,10 +1506,12 @@ namespace StarlitTides.EditorTools
             wb.temperature.Override(-9f);
             wb.tint.Override(6f);
 
-            var split = Add<SplitToning>();
-            split.shadows.Override(new Color(0.24f, 0.24f, 0.55f));   // cool navy shadows
-            split.highlights.Override(new Color(1f, 0.8f, 0.6f));     // warm moon/lantern highlights
-            split.balance.Override(-20f);
+            // Phase 8: a colour-grading LUT built in code (StarlitGradeLut) replaces the
+            // old split toning. Shadows lean teal-indigo, highlights lean warm, the
+            // mid-tones get a little extra saturation, plus a gentle S-curve.
+            var lut = Add<ColorLookup>();
+            lut.texture.Override(StarlitGradeLut());
+            lut.contribution.Override(1f);
 
             var vig = Add<Vignette>();
             vig.color.Override(new Color(0.02f, 0.03f, 0.08f));
@@ -1474,10 +1534,19 @@ namespace StarlitTides.EditorTools
 
             EditorUtility.SetDirty(profile);
 
-            // find the template's Global Volume or make one
+            // Find the night volume itself (or the template's plain "Global Volume"),
+            // or make one. Phase 8 fix: this used to take the FIRST global volume in
+            // the scene. On a rebuild that could be the Hit Flash, Light Vision,
+            // Photo Mode or menu volume (the search order isn't fixed). That volume
+            // was renamed and given the night profile, then destroyed when its own
+            // builder rebuilt, leaving the real night volume pointing at a deleted
+            // profile: no night grade at all, at random.
             Volume vol = null;
             foreach (Volume v in Object.FindObjectsByType<Volume>())
-                if (v.isGlobal) { vol = v; break; }
+                if (v.gameObject.name == "Global Volume (Starlit Night)") { vol = v; break; }
+            if (vol == null)
+                foreach (Volume v in Object.FindObjectsByType<Volume>())
+                    if (v.gameObject.name == "Global Volume" && v.isGlobal) { vol = v; break; }
             if (vol == null) vol = Child("Global Volume").AddComponent<Volume>();
             vol.gameObject.name = "Global Volume (Starlit Night)";
             vol.isGlobal = true;

@@ -42,6 +42,13 @@ namespace StarlitTides
         [Tooltip("Overall plankton glow. The intro animates it 0 -> 1 as night falls.")]
         [Range(0f, 1f)] public float nightGlow = 1f;
 
+        [Header("Boat wake trail (Phase 8)")]
+        [Tooltip("Seconds between recorded points of the boat's glowing wake.")]
+        public float trailInterval = 0.1f;
+        [Tooltip("How long the wake keeps glowing, in seconds.")]
+        public float trailLife = 2.8f;
+        public const int MaxTrailPoints = 28;
+
         [Header("Ripples")]
         [Tooltip("How long a ripple glows, in seconds.")]
         public float defaultRippleLife = 1.6f;
@@ -59,6 +66,12 @@ namespace StarlitTides
         List<WaterDisturber> disturbers = new List<WaterDisturber>();
         List<Ripple> ripples = new List<Ripple>();
         Vector4[] glowPoints = new Vector4[MaxDisturbPoints];
+        // Wake: (flowX, flowZ, time recorded, strength), oldest first. Points are in
+        // FLOW coordinates (world XZ + tide offset), the same space the shader's
+        // patterns use, so the wake drifts away with the water like real plankton.
+        readonly List<Vector4> trail = new List<Vector4>();
+        readonly Vector4[] trailPoints = new Vector4[MaxTrailPoints];
+        float trailTimer;
 
         float oceanTime;
         float tideOffset;
@@ -96,6 +109,7 @@ namespace StarlitTides
 
             ReadWaveSettings();
             UpdateRipples(dt);
+            RecordTrail(dt);
             SendToShader();
         }
 
@@ -124,6 +138,27 @@ namespace StarlitTides
             waveFadeStart = oceanMaterial.GetFloat("_WaveFadeStart");
             waveFadeEnd = oceanMaterial.GetFloat("_WaveFadeEnd");
             calmZone = oceanMaterial.GetVector("_CalmZone");
+        }
+
+        // Drops a point of glowing wake behind the boat every trailInterval seconds.
+        void RecordTrail(float dt)
+        {
+            while (trail.Count > 0 && oceanTime - trail[0].z > trailLife) trail.RemoveAt(0);
+
+            BoatController boat = Application.isPlaying ? BoatController.Instance : null;
+            if (boat == null) { if (!Application.isPlaying) trail.Clear(); return; }
+
+            trailTimer -= dt;
+            if (trailTimer > 0f) return;
+            trailTimer = trailInterval;
+
+            Vector3 p = boat.transform.position;
+            if (Mathf.Abs(p.y - GetWaterHeight(p)) > 0.6f) return;   // sinking / airborne: no wake
+            // stronger when steering fast and during a dash
+            float speed = new Vector2(boat.Velocity.x, boat.Velocity.z).magnitude;
+            float strength = 0.55f + Mathf.Clamp01(speed / 15f) * 0.6f + (boat.IsDashing ? 0.8f : 0f);
+            trail.Add(new Vector4(p.x, p.z + tideOffset, oceanTime, strength));
+            if (trail.Count > MaxTrailPoints) trail.RemoveAt(0);
         }
 
         void UpdateRipples(float dt)
@@ -179,6 +214,11 @@ namespace StarlitTides
             Shader.SetGlobalFloat("_SeaNightGlow", nightGlow);
             Shader.SetGlobalVectorArray("_DisturbPoints", glowPoints);
             Shader.SetGlobalInt("_DisturbCount", count);
+
+            for (int i = 0; i < MaxTrailPoints; i++) trailPoints[i] = i < trail.Count ? trail[i] : Vector4.zero;
+            Shader.SetGlobalVectorArray("_TrailPoints", trailPoints);
+            Shader.SetGlobalInt("_TrailCount", trail.Count);
+            Shader.SetGlobalFloat("_TrailLife", trailLife);
         }
 
         public void Register(WaterDisturber d)

@@ -81,6 +81,20 @@ Shader "StarlitTides/Ocean"
         _SparkleScale   ("Plankton Sparkle Cell Size (m)", Float) = 1.1
         _SparkleDensity ("Plankton Sparkle Density", Range(0, 1)) = 0.35
         _SparkleIntensity ("Plankton Sparkle Intensity", Range(0, 20)) = 5
+
+        [Header(Stylized look  Phase 8)]
+        _StylizeAmount  ("Stylize Amount (0 = Phase 7 look)", Range(0, 1)) = 1
+        _NearColor      ("Near Water Colour (looking down)", Color) = (0.035, 0.34, 0.42, 1)
+        _ReflectionTint ("Reflection Tint (no grey wash)", Color) = (0.46, 0.56, 0.72, 1)
+        _ColorBands     ("Colour Bands", Range(1, 8)) = 4
+        _BandSoftness   ("Band Softness", Range(0.01, 0.5)) = 0.2
+        _StarGlint      ("Star Glint Strength", Range(0, 20)) = 5
+        _StarGlintCell  ("Star Glint Cell Size (m)", Float) = 1.1
+        _MicroRipple    ("Micro Ripple Strength", Range(0, 1)) = 0.22
+        _FoamLines      ("Crest Foam Lines", Range(0, 1)) = 0.55
+        [HDR] _TrailColor ("Wake Glow Colour", Color) = (0.25, 2.3, 2.6, 1)
+        _TrailWidth     ("Wake Width (m)", Float) = 0.75
+        _TrailStrength  ("Wake Strength", Range(0, 6)) = 1.8
     }
 
     SubShader
@@ -146,6 +160,11 @@ Shader "StarlitTides/Ocean"
                 float  _BioHueScale;
                 float  _BioAmbient, _BioCrest, _BioShore, _BioDisturb;
                 float  _SparkleScale, _SparkleDensity, _SparkleIntensity;
+                float  _StylizeAmount;
+                float4 _NearColor, _ReflectionTint;
+                float  _ColorBands, _BandSoftness, _StarGlint, _StarGlintCell, _MicroRipple, _FoamLines;
+                float4 _TrailColor;
+                float  _TrailWidth, _TrailStrength;
             CBUFFER_END
 
             // ---------- global values written by OceanController.cs ----------
@@ -158,6 +177,9 @@ Shader "StarlitTides/Ocean"
             float4 _DisturbPoints[32];// xy = world XZ, z = radius, w = strength
             int    _DisturbCount;
             float  _StarlitLaneHalfWidth; // PlayArea.cs: half width of the play lane (0 = no channel tint)
+            float4 _TrailPoints[28];      // boat wake: flow XZ, time recorded, strength (oldest first)
+            int    _TrailCount;
+            float  _TrailLife;
 
             struct Attributes
             {
@@ -272,7 +294,7 @@ Shader "StarlitTides/Ocean"
                 float f0 = SN_Fbm2(pf, 2);
                 float fx = SN_Fbm2(pf + float2(ef, 0), 2);
                 float fz = SN_Fbm2(pf + float2(0, ef), 2);
-                slope += float2(fx - f0, fz - f0) / ef * 0.5 * distanceFade;
+                slope += float2(fx - f0, fz - f0) / ef * _MicroRipple * distanceFade;   // Phase 8: calmer (was 0.5)
                 slope *= _RippleStrength * distanceFade;
                 return normalize(float3(-slope.x, 1, -slope.y));
             }
@@ -319,6 +341,58 @@ Shader "StarlitTides/Ocean"
             // blown-out blob. This curve grows linearly at first, then levels off.
             float SoftLimit(float x) { return x / (1.0 + x * 0.6); }
 
+            // ---------------- Phase 8 helpers ----------------
+            // Soft posterize: n flat bands with a smooth step between them.
+            float SoftBands(float x, float n, float softness)
+            {
+                float k = x * n;
+                float band = floor(k) + smoothstep(0.5 - softness, 0.5 + softness, frac(k));
+                return saturate(band / n);
+            }
+
+            // One twinkling 4-point star per cell (where the moon glints on the
+            // waves): fewer, larger sparkles instead of single noisy pixels.
+            // Fades out once a cell is only a few pixels wide (no aliasing).
+            float StarGlint(float2 flowXZ, float cell)
+            {
+                float2 p = flowXZ / cell;
+                float2 c = floor(p);
+                float3 h = SN_Hash32(c + 17.0);
+                if (h.z > 0.45) return 0;
+                float2 o = frac(p) - 0.5 - (h.xy - 0.5) * 0.5;
+                float core = saturate(1.0 - length(o) / 0.08);
+                float arms = saturate(1.0 - abs(o.x) / 0.014) * saturate(1.0 - abs(o.y) / 0.24)
+                           + saturate(1.0 - abs(o.y) / 0.014) * saturate(1.0 - abs(o.x) / 0.24);
+                float twinkle = 0.45 + 0.55 * sin(_OceanTime * (2.0 + h.x * 4.0) + h.y * 30.0);
+                float pixels = 1.0 / max(fwidth(p.x), 1e-4);          // cell size in pixels
+                return (core * core * 1.6 + arms * 0.7) * twinkle * saturate((pixels - 6.0) / 10.0);
+            }
+
+            // The boat's glowing wake: a ribbon through the recorded points (in
+            // flow space, so it drifts away with the water). Bright edges and a
+            // softer middle, widening and fading with age.
+            float WakeGlow(float2 flowXZ)
+            {
+                if (_TrailCount < 2) return 0;
+                if (distance(flowXZ, _TrailPoints[_TrailCount - 1].xy) > 60.0) return 0;
+                float glow = 0;
+                [loop] for (int i = 0; i < _TrailCount - 1; i++)
+                {
+                    float4 a = _TrailPoints[i], b = _TrailPoints[i + 1];
+                    float2 ab = b.xy - a.xy;
+                    float t = saturate(dot(flowXZ - a.xy, ab) / max(dot(ab, ab), 1e-4));
+                    float d = distance(flowXZ, a.xy + ab * t);
+                    float age = _OceanTime - lerp(a.z, b.z, t);
+                    float life = saturate(1.0 - age / max(_TrailLife, 0.01));
+                    float w = _TrailWidth * (1.0 + age * 0.9);
+                    if (d > w * 2.5) continue;
+                    float edge = (d - w * 0.8) / (w * 0.28);
+                    float g = exp(-(d * d) / (w * w)) * 0.45 + exp(-edge * edge) * 0.8;
+                    glow = max(glow, g * life * life * lerp(a.w, b.w, t));
+                }
+                return glow;
+            }
+
             half4 OceanFrag(Varyings IN) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
@@ -351,6 +425,19 @@ Shader "StarlitTides/Ocean"
                 float3 waterTint = lerp(_ShallowColor.rgb, _DeepColor.rgb, depthFactor);
                 float3 body = lerp(sceneBelow * transmittance * _ShallowColor.rgb * 2.0, waterTint, saturate(depthFactor * 1.15));
 
+                // ---- Phase 8: stylized colour ramp ----
+                // Looking down at near water = teal, grazing / far water = deep indigo,
+                // softly posterized into a few bands (painted, not photographic).
+                // Shallow water still shows what is below it (rocks, sand).
+                {
+                    float facing = saturate(saturate(dot(N, viewDirWS)) * 1.25);
+                    float nearAmt = 1.0 - smoothstep(25.0, 220.0, camDist);
+                    float ramp = SoftBands(facing * lerp(0.35, 1.0, nearAmt), _ColorBands, _BandSoftness);
+                    float3 styl = lerp(_DeepColor.rgb, _NearColor.rgb, ramp);
+                    styl = lerp(body, styl, saturate(depthFactor * 1.2));
+                    body = lerp(body, styl, _StylizeAmount);
+                }
+
                 // ---- Fresnel reflection of sky + reflection probe ----
                 float NdotV = saturate(dot(N, viewDirWS));
                 float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, _FresnelPower);
@@ -359,16 +446,23 @@ Shader "StarlitTides/Ocean"
                 float3 reflection = GlossyEnvironmentReflection(R, posWS, _ReflectionRoughness, 1.0, screenUV) * _ReflectionStrength;
                 reflection = lerp(reflection, _HorizonColor.rgb, saturate(1.0 - nearFade) * 0.35);
 
+                // Phase 8: tint the reflection toward indigo-lilac instead of a grey wash,
+                // and band the fresnel a little.
+                reflection = lerp(reflection, Luminance(reflection) * _ReflectionTint.rgb * 1.3, _StylizeAmount * 0.5);
+                fresnel = lerp(fresnel, SoftBands(fresnel, 3.0, 0.25), _StylizeAmount * 0.5);
                 float3 color = lerp(body, reflection, fresnel);
 
                 // ---- moonlight: sharp glint + glittering moon path ----
                 Light mainLight = GetMainLight();
                 float3 H = normalize(mainLight.direction + viewDirWS);
                 float NdotH = saturate(dot(N, H));
-                float glint = pow(NdotH, _SpecularPower) * _SpecularIntensity;
+                float glint = pow(NdotH, _SpecularPower) * _SpecularIntensity * lerp(1.0, 0.2, _StylizeAmount);   // Phase 8: fewer pixel speckles
                 float glitterCells = PlanktonSparkle(IN.flowXZ * 3.0 + _OceanTime * 0.5, 0.35, 0.6);
                 float moonPath = pow(NdotH, _SpecularPower * 0.08) * glitterCells * _MoonPathGlitter;
                 color += (glint + moonPath) * mainLight.color;
+                // Phase 8: star-shaped glints where the moon catches the waves
+                float starMask = pow(NdotH, _SpecularPower * 0.1);
+                color += StarGlint(IN.flowXZ, _StarGlintCell) * starMask * _StarGlint * _StylizeAmount * mainLight.color;
 
                 // ---- lantern / window lights reflected on the water ----
                 #if defined(_ADDITIONAL_LIGHTS) && !defined(STARLIT_QUALITY_LOW)
@@ -395,6 +489,10 @@ Shader "StarlitTides/Ocean"
                 float crest = saturate((IN.waveHeight - _CrestFoamThreshold * _WaveScale) / (0.3 * _WaveScale + 0.01));
                 crest *= crest;                                                          // thin, sharp crest lines
                 float crestFoam = crest * smoothstep(0.45, 0.85, foamNoise + crest * 0.3) * _CrestFoamAmount;
+                // Phase 8: crest foam as soft flowing lines (noise contours) instead of speckle
+                float foamContour = 1.0 - abs(frac(foamNoise * 3.0 + _OceanTime * 0.04) * 2.0 - 1.0);
+                float crestLines = saturate(crest * 2.5) * smoothstep(0.8, 0.92, foamContour) * _FoamLines;
+                crestFoam = lerp(crestFoam, max(crestFoam * 0.4, crestLines), _StylizeAmount);
                 float foam = saturate(shoreFoam + crestFoam);
                 color = lerp(color, _FoamColor.rgb, foam * 0.55);
 
@@ -415,6 +513,9 @@ Shader "StarlitTides/Ocean"
                 float sparkleHash = SN_Hash12(floor(IN.flowXZ / _SparkleScale) + 3.7);
                 float3 sparkleCol = sparkleHash < 0.55 ? bioCol : (sparkleHash < 0.82 ? _BioColor2.rgb : _SparkleColor3.rgb);
                 float3 bioLight = (glow * bioCol + sparkle * _SparkleIntensity * sparkleCol) * _SeaNightGlow;
+                // Phase 8: the boat's glowing wake, with a slow swirl in it
+                float wake = WakeGlow(IN.flowXZ) * (0.6 + 0.8 * SN_Noise2(IN.flowXZ * 1.3 + _OceanTime * 0.35));
+                bioLight += wake * _TrailStrength * _TrailColor.rgb * _SeaNightGlow;
 
                 // Starburst power-up: the plankton glows brighter and golden light
                 // shimmers across the whole sea (sparkles and wave crests the most).
