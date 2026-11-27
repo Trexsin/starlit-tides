@@ -15,6 +15,9 @@ namespace StarlitTides.EditorTools
 {
     public static class GameBuilder
     {
+        /// <summary>Unique app ID (letters, digits and dots only, so it is valid on every platform).</summary>
+        public const string BundleId = "com.starlittidesteam.starlittides";
+
         [MenuItem("Starlit Tides/9. Build Windows (.exe)", priority = 25)]
         public static void BuildWindows()
         {
@@ -49,6 +52,12 @@ namespace StarlitTides.EditorTools
             // Player settings for the final game.
             PlayerSettings.companyName = "Starlit Tides Team";
             PlayerSettings.productName = "Starlit Tides";
+            // Our own bundle ID: the URP template's default is shared by every
+            // project made from it, so macOS could confuse this app with another
+            // Unity game (Finder/`open` launching the wrong one).
+            PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Standalone, BundleId);
+            PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.iOS, BundleId);
+            PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, BundleId);
             PlayerSettings.defaultScreenWidth = 1920;
             PlayerSettings.defaultScreenHeight = 1080;
             PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
