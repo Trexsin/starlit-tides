@@ -55,6 +55,8 @@ namespace StarlitTides
         [Range(0f, 1f)] public float mistMax = 0.72f;
         [Tooltip("Strength of the god rays streaming from the moon.")]
         public float godRays = 0.9f;
+        [Tooltip("Set by SettingsManager: 1 on High, 0 on Low/Medium (the god-ray march is the atmosphere's most expensive part).")]
+        [Range(0f, 1f)] public float godRayQuality = 1f;
         public float godRayThreshold = 0.35f;
         [Range(0f, 1f)] public float lightning = 0f;
         [Tooltip("How fast a lightning flash fades, per second.")]
@@ -192,7 +194,8 @@ namespace StarlitTides
             Shader.SetGlobalColor("_AtmoColor", haze);
             Shader.SetGlobalColor("_AtmoMoonColor", moonGlow);
             Shader.SetGlobalVector("_AtmoParams", new Vector4(mistDensity * (1f + storm * 1.5f), mistFalloff, mistStart, mistMax));
-            Shader.SetGlobalVector("_AtmoRayParams", new Vector4(godRays * (1f - storm) * (1f - sunset * 0.5f), godRayThreshold, 0.955f, godRays > 0f ? 1f : 0f));
+            float rays = godRays * godRayQuality;
+            Shader.SetGlobalVector("_AtmoRayParams", new Vector4(rays * (1f - storm) * (1f - sunset * 0.5f), godRayThreshold, 0.955f, rays > 0f ? 1f : 0f));
             Shader.SetGlobalFloat("_AtmoBaseHeight", 0f);
         }
 

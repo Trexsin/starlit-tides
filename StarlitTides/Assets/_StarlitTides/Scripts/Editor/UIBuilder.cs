@@ -734,7 +734,7 @@ namespace StarlitTides.EditorTools
                 a.upscalingFilter = i == 0 ? UpscalingFilterSelection.FSR : UpscalingFilterSelection.Auto;
                 a.fsrOverrideSharpness = true;
                 a.fsrSharpness = 0.9f;
-                a.msaaSampleCount = i == 0 ? 1 : 4;      // Low uses SMAA on the camera instead
+                a.msaaSampleCount = i == 0 ? 1 : i == 1 ? 2 : 4;   // Low uses SMAA on the camera instead; Medium 2x (Phase 8, Step 6), High 4x
                 // 64-bit HDR stops colour banding in the dark night gradients (sky, deep water).
                 a.hdrColorBufferPrecision = i == 2 ? HDRColorBufferPrecision._64Bits : HDRColorBufferPrecision._32Bits;
                 a.mainLightShadowmapResolution = i == 0 ? 1024 : i == 1 ? 2048 : 4096;

@@ -180,6 +180,7 @@ Shader "StarlitTides/Ocean"
             float4 _TrailPoints[28];      // boat wake: flow XZ, time recorded, strength (oldest first)
             int    _TrailCount;
             float  _TrailLife;
+            float4 _TrailBounds;          // wake bounding box in flow XZ (min x, min z, max x, max z)
 
             struct Attributes
             {
@@ -270,6 +271,9 @@ Shader "StarlitTides/Ocean"
             // The slope (finite differences) bends the normal.
             float3 RippleNormal(float2 flowXZ, float distanceFade)
             {
+                // Phase 8, Step 6: far water has the ripples faded to nothing anyway,
+                // so skip the ~21 noise lookups there (a big share of the ocean's cost).
+                if (distanceFade <= 0.001) return float3(0, 1, 0);
                 float2 p = flowXZ * _RippleScale;
                 float t = _OceanTime * _RippleSpeed;
                 float e = 0.15;
@@ -374,7 +378,7 @@ Shader "StarlitTides/Ocean"
             float WakeGlow(float2 flowXZ)
             {
                 if (_TrailCount < 2) return 0;
-                if (distance(flowXZ, _TrailPoints[_TrailCount - 1].xy) > 60.0) return 0;
+                if (any(flowXZ < _TrailBounds.xy) || any(flowXZ > _TrailBounds.zw)) return 0;   // outside the wake's box
                 float glow = 0;
                 [loop] for (int i = 0; i < _TrailCount - 1; i++)
                 {
@@ -461,8 +465,10 @@ Shader "StarlitTides/Ocean"
                 float moonPath = pow(NdotH, _SpecularPower * 0.08) * glitterCells * _MoonPathGlitter;
                 color += (glint + moonPath) * mainLight.color;
                 // Phase 8: star-shaped glints where the moon catches the waves
-                float starMask = pow(NdotH, _SpecularPower * 0.1);
-                color += StarGlint(IN.flowXZ, _StarGlintCell) * starMask * _StarGlint * _StylizeAmount * mainLight.color;
+                #if !defined(STARLIT_QUALITY_LOW)
+                    float starMask = pow(NdotH, _SpecularPower * 0.1);
+                    color += StarGlint(IN.flowXZ, _StarGlintCell) * starMask * _StarGlint * _StylizeAmount * mainLight.color;
+                #endif
 
                 // ---- lantern / window lights reflected on the water ----
                 #if defined(_ADDITIONAL_LIGHTS) && !defined(STARLIT_QUALITY_LOW)
@@ -514,8 +520,10 @@ Shader "StarlitTides/Ocean"
                 float3 sparkleCol = sparkleHash < 0.55 ? bioCol : (sparkleHash < 0.82 ? _BioColor2.rgb : _SparkleColor3.rgb);
                 float3 bioLight = (glow * bioCol + sparkle * _SparkleIntensity * sparkleCol) * _SeaNightGlow;
                 // Phase 8: the boat's glowing wake, with a slow swirl in it
-                float wake = WakeGlow(IN.flowXZ) * (0.6 + 0.8 * SN_Noise2(IN.flowXZ * 1.3 + _OceanTime * 0.35));
-                bioLight += wake * _TrailStrength * _TrailColor.rgb * _SeaNightGlow;
+                #if !defined(STARLIT_QUALITY_LOW)   // the wake loops over 28 segments per pixel near the boat
+                    float wake = WakeGlow(IN.flowXZ) * (0.6 + 0.8 * SN_Noise2(IN.flowXZ * 1.3 + _OceanTime * 0.35));
+                    bioLight += wake * _TrailStrength * _TrailColor.rgb * _SeaNightGlow;
+                #endif
 
                 // Starburst power-up: the plankton glows brighter and golden light
                 // shimmers across the whole sea (sparkles and wave crests the most).

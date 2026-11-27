@@ -1,6 +1,6 @@
 # Starlit Tides — Phase 8 Plan: Stylized Look + Wider Play Area
 
-**Status:** Steps 1–5 are done (play area, stylized shader + outlines, smoother geometry, the sea field, ocean + colour grade); see the `Phase8_StepN_*.md` guides. Step 6 (performance, quality tiers, README) is still to do. Left over from Step 3: a stylized terrain material, creature outlines and the pier.
+**Status:** All six steps are done; see [`Phase8_Stylized_Overhaul.md`](Phase8_Stylized_Overhaul.md) for the overview and the step guides. Left over from Step 3: a stylized terrain material, creature outlines and the pier.
 **Feedback this plan answers:**
 1. *"The graphics are too low poly and look bad. Make them stylized, fitting the theme, and beautiful."*
 2. *"The play area is too narrow. The camera shows a wide view, so only a small part of the map has objects in it."*
@@ -206,7 +206,7 @@ Each step ends with batch-mode renders from **fixed reference shots** (gameplay 
 | **3** ✅ | Workstream C: mountains, trees, houses, lighthouse, rocks, boat, moon | close-up renders: no visible facets on silhouettes except the boat |
 | **4** ✅ | Workstream A4: `AmbientSeaField` decorations + horizon islands | the gameplay shot has interesting content across the full width |
 | **5** ✅ | Workstream D + B4: ocean restyle, atmosphere, grading, god rays | final look pass |
-| **6** | Performance and quality tiers (below), then update the README and the Phase 8 guide | Low ≥ 60 fps on integrated GPU, High ≥ 60 fps at 1440p |
+| **6** ✅ | Performance and quality tiers (below), then update the README and the Phase 8 guide | Low ≥ 60 fps on integrated GPU, High ≥ 60 fps at 1440p |
 
 Steps 1 and 2 are independent and could be done in either order. Step 1 first is recommended because it changes what the camera sees, which affects every visual decision after it.
 

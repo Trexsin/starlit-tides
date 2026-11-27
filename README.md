@@ -4,7 +4,11 @@ A 3D arcade survival game for a university **Computer Graphics** course, built i
 
 Steer a small glowing paper boat out across a dark night sea, away from a sleeping coastal village. Real bioluminescent beaches inspired the setting: the boat's light slowly fades, so you keep collecting glowing plankton orbs to stay alive while dodging rocks, drifting logs, jellyfish and glowing sea creatures: manta rays, sea turtles and leaping dolphins. If the light runs out, darkness swallows the boat.
 
-![Main menu](Phase6/Preview/menu.png)
+![Gameplay](Phase8/Preview/phase8_hero.png)
+
+| | |
+|---|---|
+| ![](Phase8/Preview/step5_menu.png) **The bay (main menu)** | ![](Phase8/Preview/step4_storm.png) **Storm, with the humpback breaching** |
 
 | | |
 |---|---|
@@ -14,6 +18,8 @@ Steer a small glowing paper boat out across a dark night sea, away from a sleepi
 ## Highlights
 
 **Graphics**
+- **Stylized "Moonlit Storybook" look** (Phase 8): a hand-written toon-soft shader with banded light, indigo shadows, a moonlit rim, painted gradients and inverted-hull outlines; smoothing groups and soft foliage normals on the procedural meshes; heightfield mountains with snow; a code-built colour-grading LUT
+- **A living sea beyond the lane** (Phase 8): algae blooms, paper lanterns, sea stacks, a rock arch, fishing boats, whale spouts, horizon islands, and a glowing wake behind the boat
 - **Bioluminescent ocean shader** (hand-written URP HLSL): Gerstner waves, depth colour, refraction, Fresnel reflections, shoreline foam, and neon plankton glow around every object that touches the water
 - **Procedural night sky**: twinkling stars, Milky Way, moon, animated aurora, storm clouds with lightning, sunset
 - **One-click world builder**: village with glowing windows, lantern-lit square, market stalls, pier, arched bridge over a lagoon, lighthouse with sweeping volumetric beams, forest, grassland and layered mountains
@@ -39,7 +45,7 @@ Steer a small glowing paper boat out across a dark night sea, away from a sleepi
 
 **Finished game**
 - Main menu with a living 3D background, HUD with a radial light meter, How to Play, Settings, Pause and Game Over screens with fades
-- Saved settings (volumes, fullscreen, FPS counter, intro on/off) and **Low / Medium / High** quality presets, with a cheaper ocean shader on Low
+- Saved settings (volumes, fullscreen, FPS counter, intro on/off) and **Low / Medium / High** quality presets. Low skips outlines, the wake, star glints and ocean detail; god rays are High only; the scenery density follows the preset
 - **Global leaderboard** on Vercel + Neon Postgres: live at <https://starlit-tides.vercel.app/api/scores>
 
 ## Getting started
@@ -48,7 +54,7 @@ Steer a small glowing paper boat out across a dark night sea, away from a sleepi
 2. Unity Hub → **Add project from disk** → select the [`StarlitTides/`](StarlitTides/) folder.
 3. Open `Assets/_StarlitTides/Scenes/StarlitBay.unity` and press **▶ Play**.
 
-The scene is built by the **Starlit Tides** menu in the editor (steps 4–8 and 10). **Starlit Tides → Rebuild Everything** runs them all and saves the scene. To make the game:
+The scene is built by the **Starlit Tides** menu in the editor (steps 4–8, 10 and 11). **Starlit Tides → Rebuild Everything** runs them all and saves the scene. To make the game:
 - **Starlit Tides → 9. Build Windows (.exe)**, written to `StarlitTides/Builds/Windows/`
 - **Starlit Tides → Build macOS (.app)**, written to `StarlitTides/Builds/macOS/`
 
@@ -66,6 +72,7 @@ Builds are not stored in git; make them from the project.
 | [`Phase5/`](Phase5/Phase5_Bonus.md) | Bonus features 7–11: whale, living village, Photo Mode, procedural audio, high scores |
 | [`Phase6/`](Phase6/Phase6_Polish.md) | UI, settings, quality presets, optimisation and the build tools |
 | [`Phase7/`](Phase7/Phase7_Visual_Upgrade.md) | Out to sea: turned the bay, made the image sharper, added sea-creature obstacles |
+| [`Phase8/`](Phase8/Phase8_Stylized_Overhaul.md) | Stylized overhaul: wider play area, stylized shader and outlines, smoother geometry, the sea field, ocean restyle + colour LUT, performance tiers |
 | [`Online/`](Online/) | Unity `LeaderboardClient.cs` that talks to the leaderboard API |
 | [`leaderboard-api/`](leaderboard-api/README.md) | Vercel serverless API (`/api/scores`) backed by Neon Postgres |
 | `starlit_tides.cpp`, `Makefile` | An earlier C++ / OpenGL (GLUT) prototype of the game |

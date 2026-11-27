@@ -559,6 +559,7 @@ namespace StarlitTides.EditorTools
             StylizedMaterials.SetAccent(M("M_Mountain2"), new Color(0.38f, 0.42f, 0.62f));
             StylizedMaterials.SetAccent(M("M_Mountain3"), new Color(0.32f, 0.35f, 0.56f));
             StylizedMaterials.SetAccent(M("M_Rock"), new Color(0.17f, 0.27f, 0.25f));   // moss on beach rocks
+            M("M_Rock").SetShaderPassEnabled("SRPDefaultUnlit", false);   // Step 6: hundreds of small rocks, outlines not worth the draw calls
 
             // custom shaders
             // Moody night sea: deep navy, teal only in the shallows. Glow accents are

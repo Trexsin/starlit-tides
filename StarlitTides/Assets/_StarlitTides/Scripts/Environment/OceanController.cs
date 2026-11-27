@@ -215,7 +215,18 @@ namespace StarlitTides
             Shader.SetGlobalVectorArray("_DisturbPoints", glowPoints);
             Shader.SetGlobalInt("_DisturbCount", count);
 
-            for (int i = 0; i < MaxTrailPoints; i++) trailPoints[i] = i < trail.Count ? trail[i] : Vector4.zero;
+            // Bounding box of the wake (flow XZ), padded by its widest glow (~8 m):
+            // pixels outside it skip the shader's 28-segment loop (Phase 8, Step 6).
+            Vector4 bounds = new Vector4(1e6f, 1e6f, -1e6f, -1e6f);
+            for (int i = 0; i < MaxTrailPoints; i++)
+            {
+                trailPoints[i] = i < trail.Count ? trail[i] : Vector4.zero;
+                if (i >= trail.Count) continue;
+                bounds.x = Mathf.Min(bounds.x, trail[i].x); bounds.y = Mathf.Min(bounds.y, trail[i].y);
+                bounds.z = Mathf.Max(bounds.z, trail[i].x); bounds.w = Mathf.Max(bounds.w, trail[i].y);
+            }
+            const float pad = 8f;
+            Shader.SetGlobalVector("_TrailBounds", new Vector4(bounds.x - pad, bounds.y - pad, bounds.z + pad, bounds.w + pad));
             Shader.SetGlobalVectorArray("_TrailPoints", trailPoints);
             Shader.SetGlobalInt("_TrailCount", trail.Count);
             Shader.SetGlobalFloat("_TrailLife", trailLife);

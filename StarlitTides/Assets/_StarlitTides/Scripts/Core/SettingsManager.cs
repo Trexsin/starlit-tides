@@ -146,8 +146,8 @@ namespace StarlitTides
             WeatherManager weather = WeatherManager.Instance;
             if (weather != null) weather.maxRainRate = Mathf.Lerp(500f, 1400f, q);
 
-            // Anti-aliasing: Medium/High use 4x MSAA (set in their URP assets), which keeps
-            // edges sharp. Low has no MSAA, so it gets SMAA on the camera instead.
+            // Anti-aliasing: High uses 4x MSAA and Medium 2x (set in their URP assets), which
+            // keeps edges sharp. Low has no MSAA, so it gets SMAA on the camera instead.
             Camera cam = Camera.main;
             if (cam != null)
             {
@@ -160,9 +160,16 @@ namespace StarlitTides
             // Low renders at 85% resolution, so it gets the strongest pass.
             Shader.SetGlobalFloat("_StarlitSharpness", Mathf.Lerp(0.7f, 0.45f, q));
 
-            // Ocean shader: the cheaper version skips some ripple detail and the lantern reflections.
+            // STARLIT_QUALITY_LOW (Low only) switches off, in the shaders: ocean ripple
+            // detail, lantern reflections, the boat's glowing wake and the star glints
+            // (StarlitOcean), and the outline pass and paint noise (StarlitStylized).
             if (q < 0.25f) Shader.EnableKeyword("STARLIT_QUALITY_LOW");
             else Shader.DisableKeyword("STARLIT_QUALITY_LOW");
+
+            // Phase 8: moon god rays (a 28-step screen-space march) on High only.
+            SkyController sky = FindAnyObjectByType<SkyController>();
+            if (sky != null) sky.godRayQuality = q > 0.75f ? 1f : 0f;
+            // (The sea field reads the quality itself: AmbientSeaField, 45% .. 100% density.)
 
             PlayerPrefs.Save();
         }

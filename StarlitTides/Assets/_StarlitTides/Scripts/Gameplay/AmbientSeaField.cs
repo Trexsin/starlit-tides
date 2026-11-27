@@ -82,6 +82,7 @@ namespace StarlitTides
 
         void Update()
         {
+            density = CurrentDensity();   // follows the quality setting live (spacing adapts from the next spawn)
             float tide = OceanController.Instance != null ? OceanController.Instance.tideSpeed : 6f;
             float step = tide * Time.deltaTime;
 
