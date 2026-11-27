@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-7380811468593791871
+--- !u!114 &-5449694017867464434
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}
@@ -41,9 +41,9 @@ MonoBehaviour:
   m_Name: PP_Darkness
   m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.VolumeProfile
   components:
-  - {fileID: -7380811468593791871}
-  - {fileID: 7713239740688284741}
---- !u!114 &7713239740688284741
+  - {fileID: -5449694017867464434}
+  - {fileID: 7335557898087352240}
+--- !u!114 &7335557898087352240
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}

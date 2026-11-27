@@ -319,54 +319,8 @@ namespace StarlitTides.EditorTools
             return root;
         }
 
-        static GameObject MakeBigSplash()
-        {
-            GameObject go = new GameObject("VFX_WhaleSplash");
-            ParticleSystem ps = go.AddComponent<ParticleSystem>();
-            ParticleSystem.MainModule main = ps.main;
-            main.loop = false;
-            main.playOnAwake = false;
-            main.duration = 0.5f;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 2.2f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(8f, 18f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.3f, 0.9f);
-            main.gravityModifier = 1.4f;
-            main.maxParticles = 400;
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
-
-            ParticleSystem.EmissionModule emission = ps.emission;
-            emission.rateOverTime = 0f;
-            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 160), new ParticleSystem.Burst(0.15f, 80) });
-
-            ParticleSystem.ShapeModule shape = ps.shape;
-            shape.shapeType = ParticleSystemShapeType.Cone;
-            shape.angle = 30f;
-            shape.radius = 3f;
-            shape.rotation = new Vector3(-90f, 0f, 0f);
-
-            ParticleSystem.ColorOverLifetimeModule fade = ps.colorOverLifetime;
-            fade.enabled = true;
-            Gradient gradient = new Gradient();
-            gradient.SetKeys(
-                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(0.3f, 0.9f, 1f), 1f) },
-                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.6f, 0.6f), new GradientAlphaKey(0f, 1f) });
-            fade.color = gradient;
-
-            Material material = new Material(Shader.Find("StarlitTides/GlowParticle"));
-            material.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/_StarlitTides/Generated/Gameplay/T_GlowDot.png"));
-            material.SetColor("_TintColor", new Color(1.6f, 2.6f, 3f));
-            SaveAsset(material, GeneratedFolder + "/M_WhaleSplash.mat");
-
-            ParticleSystemRenderer renderer = go.GetComponent<ParticleSystemRenderer>();
-            renderer.sharedMaterial = material;
-            renderer.renderMode = ParticleSystemRenderMode.Stretch;
-            renderer.velocityScale = 0.04f;
-            renderer.lengthScale = 1.5f;
-            renderer.shadowCastingMode = ShadowCastingMode.Off;
-
-            go.AddComponent<PooledParticle>();
-            return go;
-        }
+        // VFX polish pass: built by VfxKit (spray column, crown, mist, foam and glow rings, plankton spread).
+        static GameObject MakeBigSplash() { return VfxKit.WhaleSplash(); }
 
         // ==============================================================
         // Bonus 8: living village

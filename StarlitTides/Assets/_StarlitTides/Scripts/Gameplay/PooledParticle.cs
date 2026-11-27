@@ -7,6 +7,10 @@ namespace StarlitTides
 {
     public class PooledParticle : MonoBehaviour
     {
+        [Tooltip("Children placed on the water surface (at the real wave height) before playing: shockwave rings, foam rings.")]
+        public Transform[] snapToWater = new Transform[0];
+        public float waterOffset = 0.12f;
+
         ParticleSystem[] systems;
         float lifetime;   // how long the longest particle can live
         float timer;
@@ -24,6 +28,15 @@ namespace StarlitTides
         void OnEnable()
         {
             timer = 0f;
+            OceanController ocean = OceanController.Instance;
+            if (ocean != null && snapToWater != null)
+                foreach (Transform t in snapToWater)
+                {
+                    if (t == null) continue;
+                    Vector3 p = t.position;
+                    p.y = ocean.GetWaterHeight(p) + waterOffset;
+                    t.position = p;
+                }
             foreach (ParticleSystem ps in systems)
             {
                 ps.Clear(true);

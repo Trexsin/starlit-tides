@@ -90,15 +90,15 @@ namespace StarlitTides.EditorTools
             PowerUpManager power = Child("Power Ups (Feature 3)", root.transform).AddComponent<PowerUpManager>();
             power.shootingStarPrefab = SavePrefab(MakeShootingStar(), PrefabFolder + "/ShootingStar.prefab");
             power.starPickupPrefab = SavePrefab(MakeStarPickup(), PrefabFolder + "/GoldenStarPickup.prefab");
-            power.starburstBurstVfx = SavePrefab(MakeBurst("VFX_Starburst", new Color(3.5f, 2.6f, 0.9f), 80, 9f, 1.2f), VfxFolder + "/VFX_Starburst.prefab");
+            power.starburstBurstVfx = SavePrefab(VfxKit.Starburst(), VfxFolder + "/VFX_Starburst.prefab");   // VFX polish pass
 
             // ---- Feature 4: weather ----
             WeatherManager weather = Child("Weather (Feature 4)", root.transform).AddComponent<WeatherManager>();
-            if (mainCamera != null) weather.rain = MakeRain(mainCamera.transform);
+            if (mainCamera != null) { weather.rain = MakeRain(mainCamera.transform); VfxKit.StyleRain(weather.rain); }
 
             // ---- Feature 5: near miss ----
             NearMissDetector nearMiss = Child("Near Miss (Feature 5)", root.transform).AddComponent<NearMissDetector>();
-            nearMiss.sparkleVfx = SavePrefab(MakeBurst("VFX_NearMiss", new Color(1.5f, 3f, 3.5f), 40, 5f, 0.7f), VfxFolder + "/VFX_NearMiss.prefab");
+            nearMiss.sparkleVfx = SavePrefab(VfxKit.NearMiss(), VfxFolder + "/VFX_NearMiss.prefab");
 
             // ---- Feature 6: intro cinematic ----
             MakeIntro(root.transform, mainCamera);
@@ -207,6 +207,8 @@ namespace StarlitTides.EditorTools
             head.transform.localScale = Vector3.one * 9f;
             head.GetComponent<MeshRenderer>().sharedMaterial = GlowMaterial("M_ShootingStarHead", new Color(4f, 3.6f, 3f));
             head.AddComponent<FaceCamera>();
+
+            VfxKit.StyleShootingStar(star, trail, head.GetComponent<MeshRenderer>());   // gradient trail, flare head, stardust
 
             ShootingStar script = star.AddComponent<ShootingStar>();
             script.trail = trail;

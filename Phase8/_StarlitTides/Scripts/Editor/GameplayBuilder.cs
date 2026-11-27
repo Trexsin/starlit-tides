@@ -76,6 +76,7 @@ namespace StarlitTides.EditorTools
             GameObject orbBurst = SavePrefab(BuildOrbBurst(), VfxDir + "/VFX_OrbBurst.prefab");
             GameObject splash = SavePrefab(BuildSplash(), VfxDir + "/VFX_Splash.prefab");
             GameObject dashBurst = SavePrefab(BuildDashBurst(), VfxDir + "/VFX_DashBurst.prefab");
+            GameObject hitBurst = SavePrefab(VfxKit.Hit(), VfxDir + "/VFX_Hit.prefab");   // obstacle hits: splash + coral danger sparks
             GameObject orb = SavePrefab(BuildOrb(), PrefabDir + "/Orb.prefab");
             var rocks = new List<GameObject>();
             for (int i = 0; i < 3; i++) rocks.Add(SavePrefab(BuildRock(i), PrefabDir + "/Rock_" + (i + 1) + ".prefab"));
@@ -100,7 +101,7 @@ namespace StarlitTides.EditorTools
             managers.gameObject.AddComponent<DifficultyManager>();
             managers.gameObject.AddComponent<ScoreManager>();
             var vfx = managers.gameObject.AddComponent<VfxLibrary>();
-            vfx.orbBurst = orbBurst; vfx.splash = splash; vfx.dashBurst = dashBurst;
+            vfx.orbBurst = orbBurst; vfx.splash = splash; vfx.dashBurst = dashBurst; vfx.hit = hitBurst;
             var hud = managers.gameObject.AddComponent<DebugHUD>();
             hud.lightMeter = meter; hud.boat = boatCtrl;
 
@@ -435,6 +436,7 @@ namespace StarlitTides.EditorTools
             var pr = wakeGo.GetComponent<ParticleSystemRenderer>();
             pr.sharedMaterial = _glowCyan;
             pr.shadowCastingMode = ShadowCastingMode.Off;
+            VfxKit.StyleWake(ps);   // twinkling star sparks instead of round dots
             var wake = wakeGo.AddComponent<BoatWake>();
             wake.boat = boat;
 
@@ -815,65 +817,12 @@ namespace StarlitTides.EditorTools
             return g;
         }
 
-        private static GameObject BuildOrbBurst()
-        {
-            ParticleSystem sparks = NewSystem("VFX_OrbBurst", null, _glowCyan);
-            var main = sparks.main;
-            main.duration = 0.3f;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.45f, 0.9f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(2.5f, 7f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.1f, 0.25f);
-            main.gravityModifier = 0.25f;
-            var em = sparks.emission; em.SetBursts(new[] { new ParticleSystem.Burst(0f, 36) });
-            var sh = sparks.shape; sh.shapeType = ParticleSystemShapeType.Sphere; sh.radius = 0.25f;
-            var col = sparks.colorOverLifetime; col.enabled = true; col.color = Fade(Color.white, new Color(0.3f, 0.9f, 1f));
-            var drag = sparks.limitVelocityOverLifetime; drag.enabled = true; drag.drag = 2.5f; drag.limit = 50f;
-            var r = sparks.GetComponent<ParticleSystemRenderer>(); r.renderMode = ParticleSystemRenderMode.Stretch; r.velocityScale = 0.06f; r.lengthScale = 1.5f;
+        // VFX polish pass: the effects are built by VfxKit (layered, shared textures + shader).
+        private static GameObject BuildOrbBurst() { return VfxKit.OrbBurst(); }
 
-            ParticleSystem flash = NewSystem("Flash", sparks.transform, _glowWhite);
-            var fm = flash.main;
-            fm.duration = 0.2f; fm.startLifetime = 0.35f; fm.startSpeed = 0f; fm.startSize = 2.5f;
-            var fem = flash.emission; fem.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
-            var fsz = flash.sizeOverLifetime; fsz.enabled = true; fsz.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 0.4f, 1f, 1.6f));
-            var fcol = flash.colorOverLifetime; fcol.enabled = true; fcol.color = Fade(Color.white, Color.white);
-            var fsh = flash.shape; fsh.enabled = false;
+        private static GameObject BuildSplash() { return VfxKit.Splash(); }
 
-            sparks.gameObject.AddComponent<PooledParticle>();
-            return sparks.gameObject;
-        }
-
-        private static GameObject BuildSplash()
-        {
-            ParticleSystem drops = NewSystem("VFX_Splash", null, _glowWhite);
-            var main = drops.main;
-            main.duration = 0.3f;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 1.1f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(4f, 9f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.1f, 0.28f);
-            main.gravityModifier = 1.6f;
-            var em = drops.emission; em.SetBursts(new[] { new ParticleSystem.Burst(0f, 50) });
-            var sh = drops.shape; sh.shapeType = ParticleSystemShapeType.Cone; sh.angle = 35f; sh.radius = 0.6f;
-            sh.rotation = new Vector3(-90f, 0f, 0f);
-            var col = drops.colorOverLifetime; col.enabled = true; col.color = Fade(Color.white, new Color(0.3f, 0.8f, 1f));
-            var r = drops.GetComponent<ParticleSystemRenderer>(); r.renderMode = ParticleSystemRenderMode.Stretch; r.velocityScale = 0.05f; r.lengthScale = 1.2f;
-            drops.gameObject.AddComponent<PooledParticle>();
-            return drops.gameObject;
-        }
-
-        private static GameObject BuildDashBurst()
-        {
-            ParticleSystem ps = NewSystem("VFX_DashBurst", null, _glowGold);
-            var main = ps.main;
-            main.duration = 0.2f;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.5f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(3f, 6f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.18f);
-            var em = ps.emission; em.SetBursts(new[] { new ParticleSystem.Burst(0f, 24) });
-            var sh = ps.shape; sh.shapeType = ParticleSystemShapeType.Circle; sh.radius = 0.5f; sh.rotation = new Vector3(90f, 0f, 0f);
-            var col = ps.colorOverLifetime; col.enabled = true; col.color = Fade(new Color(1f, 0.95f, 0.7f), new Color(1f, 0.6f, 0.2f));
-            ps.gameObject.AddComponent<PooledParticle>();
-            return ps.gameObject;
-        }
+        private static GameObject BuildDashBurst() { return VfxKit.DashBurst(); }
 
         // ==================================================================
         // HIT FLASH VOLUME + CAMERA

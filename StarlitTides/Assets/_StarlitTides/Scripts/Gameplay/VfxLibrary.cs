@@ -16,6 +16,8 @@ namespace StarlitTides
         public GameObject orbBurst;
         public GameObject splash;
         public GameObject dashBurst;
+        [Tooltip("Hitting an obstacle: a splash with warm danger sparks (falls back to the splash).")]
+        public GameObject hit;
 
         void Awake()
         {

@@ -503,6 +503,7 @@ namespace StarlitTides.EditorTools
             var sz = ps.sizeOverLifetime; sz.enabled = true; sz.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.6f, 1f, 1.8f));
             var pr = psGo.GetComponent<ParticleSystemRenderer>();
             pr.sharedMaterial = _glowSpray; pr.shadowCastingMode = ShadowCastingMode.Off;
+            VfxKit.StyleSpout(ps);   // VFX polish pass: soft rising mist
 
             var d = root.AddComponent<SeaDecor>();
             d.spout = ps; d.spoutInterval = new Vector2(4f, 9f);

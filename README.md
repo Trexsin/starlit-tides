@@ -19,6 +19,7 @@ Steer a small glowing paper boat out across a dark night sea, away from a sleepi
 
 **Graphics**
 - **Stylized "Moonlit Storybook" look** (Phase 8): a hand-written toon-soft shader with banded light, indigo shadows, a moonlit rim, painted gradients and inverted-hull outlines; smoothing groups and soft foliage normals on the procedural meshes; heightfield mountains with snow; a code-built colour-grading LUT
+- **Layered particle effects** (Phase 8): a custom particle shader with white-hot cores and soft particles, a procedural sprite set (star sparkles, shockwave rings, mist flipbooks, anamorphic flares), and shockwaves that sit on the waves, light trails, mist and rain ripples
 - **A living sea beyond the lane** (Phase 8): algae blooms, paper lanterns, sea stacks, a rock arch, fishing boats, whale spouts, horizon islands, and a glowing wake behind the boat
 - **Bioluminescent ocean shader** (hand-written URP HLSL): Gerstner waves, depth colour, refraction, Fresnel reflections, shoreline foam, and neon plankton glow around every object that touches the water
 - **Procedural night sky**: twinkling stars, Milky Way, moon, animated aurora, storm clouds with lightning, sunset
@@ -72,7 +73,7 @@ Builds are not stored in git; make them from the project.
 | [`Phase5/`](Phase5/Phase5_Bonus.md) | Bonus features 7–11: whale, living village, Photo Mode, procedural audio, high scores |
 | [`Phase6/`](Phase6/Phase6_Polish.md) | UI, settings, quality presets, optimisation and the build tools |
 | [`Phase7/`](Phase7/Phase7_Visual_Upgrade.md) | Out to sea: turned the bay, made the image sharper, added sea-creature obstacles |
-| [`Phase8/`](Phase8/Phase8_Stylized_Overhaul.md) | Stylized overhaul: wider play area, stylized shader and outlines, smoother geometry, the sea field, ocean restyle + colour LUT, performance tiers |
+| [`Phase8/`](Phase8/Phase8_Stylized_Overhaul.md) | Stylized overhaul: wider play area, stylized shader and outlines, smoother geometry, the sea field, ocean restyle + colour LUT, performance tiers, VFX polish |
 | [`Online/`](Online/) | Unity `LeaderboardClient.cs` that talks to the leaderboard API |
 | [`leaderboard-api/`](leaderboard-api/README.md) | Vercel serverless API (`/api/scores`) backed by Neon Postgres |
 | `starlit_tides.cpp`, `Makefile` | An earlier C++ / OpenGL (GLUT) prototype of the game |

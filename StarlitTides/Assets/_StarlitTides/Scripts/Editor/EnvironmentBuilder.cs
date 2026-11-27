@@ -1350,6 +1350,7 @@ namespace StarlitTides.EditorTools
             r.renderMode = ParticleSystemRenderMode.Billboard;
             r.shadowCastingMode = ShadowCastingMode.Off;
             r.receiveShadows = false;
+            VfxKit.StylePlankton(ps);   // VFX polish pass: twinkling star motes
         }
 
         private static void MakeFireflies(Transform parent, string name, Vector3 center, Vector3 size, float rate)
@@ -1375,6 +1376,7 @@ namespace StarlitTides.EditorTools
             r.renderMode = ParticleSystemRenderMode.Billboard;
             r.shadowCastingMode = ShadowCastingMode.Off;
             r.receiveShadows = false;
+            VfxKit.StyleFireflies(ps);   // VFX polish pass: white-hot cores and short light trails
         }
 
         private static ParticleSystem.MinMaxGradient BlinkGradient()

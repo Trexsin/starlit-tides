@@ -4,7 +4,7 @@
 
 **The feedback:** *"The graphics are too low poly and look bad. Make them stylized and beautiful. The play area is too narrow: the camera shows a wide view, but only a small section of the map has objects in it."*
 
-Phase 8 answers that in six steps, each with its own guide, before/after pictures and an explanation of the graphics technique behind it. The plan they follow is in [`Phase8_Plan_Stylized_Visuals.md`](Phase8_Plan_Stylized_Visuals.md).
+Phase 8 answers that in six steps (plus a seventh, VFX polish, from later feedback), each with its own guide, before/after pictures and an explanation of the graphics technique behind it. The plan they follow is in [`Phase8_Plan_Stylized_Visuals.md`](Phase8_Plan_Stylized_Visuals.md).
 
 | Step | Guide | What it does |
 |---|---|---|
@@ -14,6 +14,7 @@ Phase 8 answers that in six steps, each with its own guide, before/after picture
 | 4 | [The sea field](Phase8_Step4_Sea_Field.md) | Scenery beyond the lane in bands (algae blooms, lanterns, sea stacks, a rock arch, fishing boats, whale spouts), horizon islands and set pieces |
 | 5 | [Ocean and grade](Phase8_Step5_Ocean_And_Grade.md) | A painted ocean ramp, star glints, foam lines, the boat's glowing wake, a colour LUT built in code, and a fix for a bug that randomly dropped the night grade |
 | 6 | [Performance](Phase8_Step6_Performance.md) | Per-tier features, feature-by-feature timing, wake and ripple optimisations |
+| 7 | [VFX polish](Phase8_Step7_VFX.md) | A new particle shader (white-hot cores, soft particles), a procedural texture set, and every effect rebuilt in layers: shockwaves on the waves, light trails, mist, coral hit sparks, rain ripples, stardust |
 
 To apply it all: open the project and run **Starlit Tides → Rebuild Everything** (steps 4–8, 10 and **11. Build Sea Field**).
 

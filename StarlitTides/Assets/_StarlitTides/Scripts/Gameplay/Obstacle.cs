@@ -81,7 +81,7 @@ namespace StarlitTides
             HasHitBoat = true;
 
             Vector3 hitPoint = Vector3.Lerp(transform.position, boat.transform.position, 0.5f);
-            if (VfxLibrary.Instance != null) VfxLibrary.Instance.Play(VfxLibrary.Instance.splash, hitPoint);
+            if (VfxLibrary.Instance != null) VfxLibrary.Instance.Play(VfxLibrary.Instance.hit != null ? VfxLibrary.Instance.hit : VfxLibrary.Instance.splash, hitPoint);
             if (OceanController.Instance != null) OceanController.Instance.AddRipple(hitPoint, 3.5f, 2.5f, 1.8f);
             if (HitFeedback.Instance != null) HitFeedback.Instance.PlayHit();
         }
