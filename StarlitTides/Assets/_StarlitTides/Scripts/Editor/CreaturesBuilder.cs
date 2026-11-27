@@ -53,6 +53,8 @@ namespace StarlitTides.EditorTools
             Build();
             SeaFieldBuilder.Build();   // Phase 8: scenery beyond the lane + horizon islands
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
+            AssetDatabase.SaveAssets();
+            EditorAssetUtil.CheckGeneratedAssets();   // catches materials saved without their textures
             Debug.Log("[Starlit Tides] Everything rebuilt and the scene saved.");
         }
 
@@ -327,7 +329,7 @@ namespace StarlitTides.EditorTools
         }
 
         // ==============================================================
-        // Manta ray: 7.4 m wingspan, deep indigo with magenta spots
+        // Manta ray: 8 m wingspan, deep indigo with magenta spots
         // ==============================================================
         static GameObject BuildManta()
         {
@@ -347,14 +349,14 @@ namespace StarlitTides.EditorTools
             mat.SetVector("_SwimAxis", new Vector4(1f, 0f, 0f, 0f));
             Stylize(mat, 0.3f);
 
-            const float scale = 1.6f;
+            const float scale = 1.75f;   // an 8 m wingspan: the top end of a giant oceanic manta
             GameObject root = Creature("MantaRay", MantaMesh(), mat, scale, out Transform visual);
             var col = root.AddComponent<BoxCollider>();
             col.size = new Vector3(3.8f, 0.9f, 2.0f) * scale; col.center = new Vector3(0f, 0.15f, 0f);
-            var c = Setup(root, visual, col, SeaCreature.Behaviour.MantaGlide, 3.1f, 0.25f, 0.04f, new Vector2(0.4f, 2.6f),
-                new Color(0.9f, 0.45f, 1f), 2.6f, 9f, 4f);
+            var c = Setup(root, visual, col, SeaCreature.Behaviour.MantaGlide, 3.4f, 0.25f, 0.04f, new Vector2(0.4f, 2.6f),
+                new Color(0.9f, 0.45f, 1f), 2.8f, 10f, 4.4f);
             c.weave = 1.6f; c.weaveFrequency = 0.18f;
-            c.leapChance = 0.45f; c.leapHeight = 3.8f; c.leapDuration = 1.7f; c.safeHeight = 1.6f;
+            c.leapChance = 0.45f; c.leapHeight = 4.2f; c.leapDuration = 1.8f; c.safeHeight = 1.8f;
             return root;
         }
 
@@ -552,7 +554,7 @@ namespace StarlitTides.EditorTools
             return root;
         }
 
-        // Orca (killer whale): 7 m, glossy black and white with violet glow lines
+        // Orca (killer whale): 9 m bull, glossy black and white with violet glow lines
         static GameObject BuildOrca()
         {
             Material mat = CreatureMaterial("M_Orca", new Color(0.012f, 0.012f, 0.025f), new Color(0.9f, 0.92f, 0.96f),
@@ -570,17 +572,19 @@ namespace StarlitTides.EditorTools
             Stylize(mat, 0.5f, 0.7f);
 
             var shape = new CetaceanShape { name = "Orca", length = 7f, radius = 1.05f, beak = 0f, dorsalHeight = 1.7f, dorsalZ = 0.02f, pectoralLength = 1.3f, flukeSpan = 2.2f };
-            GameObject root = Creature("Orca", CetaceanMesh(shape), mat, 1f, out Transform visual);
+            // Real-world scale: a big adult bull orca, ~9 m (the mesh is 7 m, x1.3).
+            const float orcaScale = 1.3f;
+            GameObject root = Creature("Orca", CetaceanMesh(shape), mat, orcaScale, out Transform visual);
             var col = root.AddComponent<CapsuleCollider>();
-            col.direction = 2; col.radius = 1.0f; col.height = 6.6f;
-            var c = Setup(root, visual, col, SeaCreature.Behaviour.DolphinLeap, 3.2f, 0.3f, -0.75f, new Vector2(0.5f, 2.6f),
-                new Color(0.7f, 0.5f, 1f), 2.2f, 9f, 3.6f);
+            col.direction = 2; col.radius = 1.0f * orcaScale; col.height = 6.6f * orcaScale;
+            var c = Setup(root, visual, col, SeaCreature.Behaviour.DolphinLeap, 3.2f * orcaScale, 0.3f, -0.75f * orcaScale, new Vector2(0.5f, 2.6f),
+                new Color(0.7f, 0.5f, 1f), 2.6f, 11f, 3.6f * orcaScale);
             c.weave = 0.3f; c.weaveFrequency = 0.2f;
-            c.leapHeight = 3.6f; c.leapDuration = 1.9f; c.safeHeight = 2f;
+            c.leapHeight = 4.4f; c.leapDuration = 2.1f; c.safeHeight = 2.5f;
             return root;
         }
 
-        // Narwhal: 4.5 m body with a 2.4 m glowing golden spiral tusk
+        // Narwhal: 5.5 m body with a 2.9 m glowing golden spiral tusk
         static GameObject BuildNarwhal()
         {
             Material mat = CreatureMaterial("M_Narwhal", new Color(0.16f, 0.2f, 0.3f), new Color(0.88f, 0.9f, 0.95f),
@@ -595,16 +599,18 @@ namespace StarlitTides.EditorTools
             Stylize(mat, 0.8f);
 
             var shape = new CetaceanShape { name = "Narwhal", length = 4.5f, radius = 0.72f, beak = 0f, dorsalHeight = 0.08f, dorsalZ = 0.02f, pectoralLength = 0.55f, flukeSpan = 1.3f, tuskLength = 2.4f };
-            GameObject root = Creature("Narwhal", CetaceanMesh(shape), mat, 1f, out Transform visual);
+            // Real-world scale: a large adult, 5.5 m body with a ~2.9 m tusk (the mesh is 4.5 m, x1.22).
+            const float narScale = 1.22f;
+            GameObject root = Creature("Narwhal", CetaceanMesh(shape), mat, narScale, out Transform visual);
             var col = root.AddComponent<CapsuleCollider>();
-            col.direction = 2; col.radius = 0.75f; col.height = 6.2f; col.center = new Vector3(0f, 0f, 1.1f);
-            var c = Setup(root, visual, col, SeaCreature.Behaviour.MantaGlide, 2.4f, 0.25f, -0.32f, new Vector2(0.5f, 2.2f),
-                new Color(1f, 0.85f, 0.45f), 2.2f, 7f, 2.6f);
+            col.direction = 2; col.radius = 0.75f * narScale; col.height = 6.2f * narScale; col.center = new Vector3(0f, 0f, 1.1f * narScale);
+            var c = Setup(root, visual, col, SeaCreature.Behaviour.MantaGlide, 2.4f * narScale, 0.25f, -0.32f * narScale, new Vector2(0.5f, 2.2f),
+                new Color(1f, 0.85f, 0.45f), 2.4f, 8f, 2.6f * narScale);
             c.weave = 0.8f; c.weaveFrequency = 0.16f;
             return root;
         }
 
-        // Humpback whale: 16 m, long pectoral fins. Scenery: it breaches far out at sea.
+        // Humpback whale: 18 m, long pectoral fins. Scenery: it breaches out at sea.
         static GameObject BuildHumpback(Transform parent)
         {
             Material mat = CreatureMaterial("M_Humpback", new Color(0.05f, 0.07f, 0.14f), new Color(0.82f, 0.85f, 0.9f),
@@ -620,11 +626,12 @@ namespace StarlitTides.EditorTools
             Stylize(mat, 0.4f);
 
             var shape = new CetaceanShape { name = "Humpback", length = 16f, radius = 2.1f, beak = 0f, dorsalHeight = 0.5f, dorsalZ = -0.12f, pectoralLength = 4.8f, flukeSpan = 5.2f };
-            GameObject whale = Creature("Humpback Whale", CetaceanMesh(shape), mat, 1f, out Transform visual);
+            // Real-world scale: a big adult humpback, ~18 m (the mesh is 16 m, x1.125).
+            GameObject whale = Creature("Humpback Whale", CetaceanMesh(shape), mat, 1.125f, out Transform visual);
             whale.transform.SetParent(parent, false);
             AddLight(whale.transform, new Vector3(0f, 2f, 0f), new Color(0.4f, 0.8f, 1f), 3f, 26f);
             var d = whale.AddComponent<WaterDisturber>();
-            d.radius = 6f; d.strength = 1.2f; d.maxHeightAboveWater = 10f;
+            d.radius = 7f; d.strength = 1.2f; d.maxHeightAboveWater = 11f;
             whale.SetActive(false);
             return whale;
         }

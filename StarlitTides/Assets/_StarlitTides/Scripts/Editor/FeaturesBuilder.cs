@@ -57,7 +57,7 @@ namespace StarlitTides.EditorTools
             MakeFolder(VfxFolder);
             MakeFolder(TimelineFolder);
 
-            glowDot = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/_StarlitTides/Generated/Gameplay/T_GlowDot.png");
+            glowDot = EditorAssetUtil.LoadTexture("Assets/_StarlitTides/Generated/Gameplay/T_GlowDot.png");
             if (glowDot == null) throw new System.Exception("[Starlit Tides] Run '5. Build Gameplay' first (the glow texture is missing).");
 
             // Remove anything from a previous build.

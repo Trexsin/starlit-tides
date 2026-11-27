@@ -194,6 +194,7 @@ namespace StarlitTides.EditorTools
             Material m = Custom(name, "StarlitTides/GlowParticle");
             m.SetTexture("_MainTex", _softDot);
             m.SetColor("_TintColor", tint);
+            EditorAssetUtil.Persist(m);   // write now, so a later import can't drop the texture
             return m;
         }
 
@@ -213,12 +214,13 @@ namespace StarlitTides.EditorTools
             tex.Apply();
             File.WriteAllBytes(path, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
-            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-            var imp = (TextureImporter)AssetImporter.GetAtPath(path);
-            imp.alphaIsTransparency = true;
-            imp.wrapMode = TextureWrapMode.Clamp;
-            imp.SaveAndReimport();
-            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            // synchronous import, never null: a pending import here once saved the glow
+            // materials with no texture, and every halo drew as a white square
+            return EditorAssetUtil.ImportTexture(path, imp =>
+            {
+                imp.alphaIsTransparency = true;
+                imp.wrapMode = TextureWrapMode.Clamp;
+            });
         }
 
         private static GameObject MeshChild(string name, Transform parent, Mesh mesh, params Material[] mats)
@@ -357,13 +359,12 @@ namespace StarlitTides.EditorTools
             tex.Apply();
             File.WriteAllBytes(path, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
-            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-            var imp = (TextureImporter)AssetImporter.GetAtPath(path);
-            imp.wrapMode = TextureWrapMode.Repeat;
-            imp.anisoLevel = 8;
-            imp.filterMode = FilterMode.Trilinear;
-            imp.SaveAndReimport();
-            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            return EditorAssetUtil.ImportTexture(path, imp =>
+            {
+                imp.wrapMode = TextureWrapMode.Repeat;
+                imp.anisoLevel = 8;
+                imp.filterMode = FilterMode.Trilinear;
+            });
         }
 
         private static GameObject BuildBoat()
@@ -871,12 +872,16 @@ namespace StarlitTides.EditorTools
             anchorGo.transform.position = new Vector3(boat.position.x * 0.55f, 0f, boat.position.z);
             var anchor = anchorGo.AddComponent<CameraAnchor>();
             anchor.boat = boat;
+            anchor.followX = 0.8f;   // the camera is close now: follow more, or the boat leaves the frame at the lane edge
 
             var look = new GameObject("Camera Look Target").transform;
             look.SetParent(anchorGo.transform, false);
-            look.localPosition = new Vector3(0f, 1f, 34f);
+            look.localPosition = new Vector3(0f, 0.8f, 16f);
 
-            Vector3 offset = new Vector3(0f, 11f, -19f);
+            // Low and close (player feedback): 6.5 m up, 12.5 m behind, ~11 deg pitch.
+            // Creatures and obstacles loom; the boat sits ~80% down the screen and the
+            // moon stays in the sky (~14% from the top).
+            Vector3 offset = new Vector3(0f, 6.5f, -12.5f);
             var go = new GameObject("CM Gameplay Camera");
             go.transform.SetParent(root, false);
             go.transform.position = anchorGo.transform.position + offset;
@@ -886,10 +891,10 @@ namespace StarlitTides.EditorTools
             cm.Priority.Enabled = true;
             cm.Priority.Value = 10;
             var lens = LensSettings.Default;
-            lens.FieldOfView = 48f; lens.NearClipPlane = 0.3f; lens.FarClipPlane = 3000f;
+            lens.FieldOfView = 52f; lens.NearClipPlane = 0.3f; lens.FarClipPlane = 3000f;
             cm.Lens = lens;
             var fit = go.AddComponent<CameraAspectFit>();   // same horizontal view on 16:9, 16:10 and 21:9
-            fit.referenceVerticalFov = 48f;
+            fit.referenceVerticalFov = 52f;
 
             var follow = go.AddComponent<CinemachineFollow>();
             follow.FollowOffset = offset;

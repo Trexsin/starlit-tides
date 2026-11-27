@@ -127,21 +127,16 @@ namespace StarlitTides.EditorTools
         {
             t.Apply();
             string path = Dir + "/" + name + ".png";
-            bool existed = File.Exists(path);
             File.WriteAllBytes(path, t.EncodeToPNG());   // same file, same GUID
             Object.DestroyImmediate(t);
-            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-            var imp = (TextureImporter)AssetImporter.GetAtPath(path);
-            if (!existed || imp.alphaIsTransparency == false)
+            return EditorAssetUtil.ImportTexture(path, imp =>
             {
                 imp.alphaIsTransparency = true;
                 imp.wrapMode = TextureWrapMode.Clamp;
                 imp.mipmapEnabled = true;
                 imp.filterMode = FilterMode.Trilinear;
                 imp.textureCompression = TextureImporterCompression.Uncompressed;   // soft gradients band when compressed
-                imp.SaveAndReimport();
-            }
-            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            });
         }
 
         // ==================================================================
@@ -170,7 +165,7 @@ namespace StarlitTides.EditorTools
             if (alpha) m.EnableKeyword("_VFX_ALPHA"); else m.DisableKeyword("_VFX_ALPHA");
             m.renderQueue = alpha ? 3000 : 3010;   // light draws over matter
             m.enableInstancing = true;
-            EditorUtility.SetDirty(m);
+            EditorAssetUtil.Persist(m);   // write now, so a later import can't drop the texture
             return m;
         }
 

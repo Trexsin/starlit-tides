@@ -15,12 +15,12 @@ namespace StarlitTides
         public GameObject splashVfx;
         [Tooltip("Seconds between breaches (random in this range).")]
         public Vector2 interval = new Vector2(20f, 40f);
-        public float breachHeight = 14f;
+        public float breachHeight = 16f;   // an 18 m whale clears ~two thirds of its body
         public float breachDuration = 4.2f;
         [Tooltip("How far to the side of the lane it surfaces (metres).")]
-        public Vector2 sideDistance = new Vector2(26f, 40f);
+        public Vector2 sideDistance = new Vector2(30f, 42f);   // just outside the channel buoys (Phase 8 lane)
         [Tooltip("How far ahead it surfaces (metres).")]
-        public Vector2 aheadDistance = new Vector2(45f, 85f);
+        public Vector2 aheadDistance = new Vector2(38f, 70f);   // closer, so the low camera sees it loom
 
         float nextBreach;
         float breachStart = -100f;

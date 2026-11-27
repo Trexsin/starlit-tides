@@ -199,14 +199,16 @@ namespace StarlitTides.EditorTools
             tex.Apply();
             File.WriteAllBytes(path, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
-            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-            TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(path);
-            importer.textureType = TextureImporterType.Sprite;
-            importer.spriteImportMode = SpriteImportMode.Single;   // Unity 6 defaults new sprites to "Multiple"
-            importer.alphaIsTransparency = true;
-            importer.mipmapEnabled = false;
-            importer.SaveAndReimport();
-            return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            EditorAssetUtil.ImportTexture(path, importer =>
+            {
+                importer.textureType = TextureImporterType.Sprite;
+                importer.spriteImportMode = SpriteImportMode.Single;   // Unity 6 defaults new sprites to "Multiple"
+                importer.alphaIsTransparency = true;
+                importer.mipmapEnabled = false;
+            });
+            Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (sprite == null) throw new System.Exception("[Starlit Tides] Sprite did not import: " + path);
+            return sprite;
         }
 
         static T SaveAsset<T>(T asset, string path) where T : Object

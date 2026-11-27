@@ -346,17 +346,17 @@ namespace StarlitTides.EditorTools
             string full = Gen + "/" + rel;
             File.WriteAllBytes(full, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
-            AssetDatabase.ImportAsset(full, ImportAssetOptions.ForceUpdate);
-            var imp = (TextureImporter)AssetImporter.GetAtPath(full);
-            imp.wrapMode = repeat ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
-            imp.alphaIsTransparency = alpha;
-            imp.mipmapEnabled = true;
-            imp.filterMode = FilterMode.Trilinear;
-            imp.anisoLevel = 8;                        // sharp at grazing angles (beaches seen from the sea)
-            imp.textureCompression = TextureImporterCompression.CompressedHQ;
-            if (normalMap) imp.textureType = TextureImporterType.NormalMap;
-            imp.SaveAndReimport();
-            return AssetDatabase.LoadAssetAtPath<Texture2D>(full);
+            // synchronous import: in an open editor the import can otherwise still be pending (EditorAssetUtil)
+            return EditorAssetUtil.ImportTexture(full, imp =>
+            {
+                imp.wrapMode = repeat ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
+                imp.alphaIsTransparency = alpha;
+                imp.mipmapEnabled = true;
+                imp.filterMode = FilterMode.Trilinear;
+                imp.anisoLevel = 8;                        // sharp at grazing angles (beaches seen from the sea)
+                imp.textureCompression = TextureImporterCompression.CompressedHQ;
+                if (normalMap) imp.textureType = TextureImporterType.NormalMap;
+            });
         }
 
         private static Texture2D _lastGroundNormal;
@@ -598,6 +598,8 @@ namespace StarlitTides.EditorTools
             Material plankton = Custom("M_PlanktonMote", "StarlitTides/GlowParticle");
             plankton.SetTexture("_MainTex", dot);
             plankton.SetColor("_TintColor", new Color(0.4f, 3.0f, 3.6f));
+            EditorAssetUtil.Persist(fire);       // write now: see EditorAssetUtil.Persist
+            EditorAssetUtil.Persist(plankton);
         }
 
         // ==================================================================
@@ -1439,16 +1441,15 @@ namespace StarlitTides.EditorTools
             string full = Gen + "/Textures/T_StarlitGradeLUT.png";
             File.WriteAllBytes(full, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
-            AssetDatabase.ImportAsset(full, ImportAssetOptions.ForceUpdate);
-            var imp = (TextureImporter)AssetImporter.GetAtPath(full);
-            imp.sRGBTexture = false;                                   // values are used as-is
-            imp.mipmapEnabled = false;
-            imp.wrapMode = TextureWrapMode.Clamp;
-            imp.filterMode = FilterMode.Bilinear;
-            imp.textureCompression = TextureImporterCompression.Uncompressed;   // compression would band the colours
-            imp.npotScale = TextureImporterNPOTScale.None;
-            imp.SaveAndReimport();
-            return AssetDatabase.LoadAssetAtPath<Texture2D>(full);
+            return EditorAssetUtil.ImportTexture(full, imp =>
+            {
+                imp.sRGBTexture = false;                                   // values are used as-is
+                imp.mipmapEnabled = false;
+                imp.wrapMode = TextureWrapMode.Clamp;
+                imp.filterMode = FilterMode.Bilinear;
+                imp.textureCompression = TextureImporterCompression.Uncompressed;   // compression would band the colours
+                imp.npotScale = TextureImporterNPOTScale.None;
+            });
         }
 
         // The "Moonlit Storybook" grade, on one sRGB colour.

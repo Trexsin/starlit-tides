@@ -57,7 +57,7 @@ namespace StarlitTides.EditorTools
             Transform root = new GameObject(RootName).transform;
 
             _quad = AssetDatabase.LoadAssetAtPath<Mesh>(GameplayGen + "/HaloQuad.asset");
-            _dot = AssetDatabase.LoadAssetAtPath<Texture2D>(GameplayGen + "/T_GlowDot.png");
+            _dot = EditorAssetUtil.LoadTexture(GameplayGen + "/T_GlowDot.png");
             CreateMaterials();
             _lanternMesh = SaveMesh(LanternMesh(), "PaperLantern.asset");   // shared by every lantern prefab (save once)
 
@@ -136,7 +136,9 @@ namespace StarlitTides.EditorTools
             var m = new Material(Shader.Find("StarlitTides/GlowParticle")) { name = name };
             m.SetTexture("_MainTex", _dot);
             m.SetColor("_TintColor", tint);
-            return SaveMat(m);
+            Material saved = SaveMat(m);
+            EditorAssetUtil.Persist(saved);
+            return saved;
         }
 
         // ==================================================================
