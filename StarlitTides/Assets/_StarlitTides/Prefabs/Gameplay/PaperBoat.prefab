@@ -183,13 +183,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7b6a37d1e3e8b478090daacef387f67a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.BoatController
-  laneX: {x: -13, y: 13}
-  laneZ: {x: -4, y: 16}
-  lateralSpeed: 12
+  lateralSpeed: 15
   forwardSpeed: 7
   acceleration: 7
   edgeSoftness: 1.2
-  dashSpeed: 24
+  edgeBumpSpeed: 6
+  dashSpeed: 27
   dashDuration: 0.18
   dashCooldown: 1.1
   dashInvulnerability: 0.3

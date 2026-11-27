@@ -166,6 +166,7 @@ MonoBehaviour:
   bobSpeed: 1.5
   extraDrift: {x: 0, y: 0, z: 0}
   despawnZ: -28
+  despawnX: 45
   followWaves: 1
   type: 1
   lightDamage: 0.2

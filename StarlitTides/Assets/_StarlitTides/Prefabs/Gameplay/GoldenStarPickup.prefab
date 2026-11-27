@@ -176,6 +176,7 @@ MonoBehaviour:
   bobSpeed: 2.5
   extraDrift: {x: 0, y: 0, z: 0}
   despawnZ: -28
+  despawnX: 45
   followWaves: 1
   lightValue: 0.12
   spinSpeed: 140
