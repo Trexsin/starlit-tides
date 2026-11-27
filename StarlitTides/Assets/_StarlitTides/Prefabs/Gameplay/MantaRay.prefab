@@ -43,8 +43,8 @@ Light:
   serializedVersion: 13
   m_Type: 2
   m_Color: {r: 0.9, g: 0.45, b: 1, a: 1}
-  m_Intensity: 2.8
-  m_Range: 10
+  m_Intensity: 2.6
+  m_Range: 9
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.802082
   m_CookieSize2D: {x: 0.5, y: 0.5}
@@ -242,7 +242,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 6.65, y: 1.5749999, z: 3.5}
+  m_Size: {x: 4.56, y: 1.08, z: 2.4}
   m_Center: {x: 0, y: 0.15, z: 0}
 --- !u!114 &6997963946320421388
 MonoBehaviour:
@@ -264,22 +264,24 @@ MonoBehaviour:
   despawnX: 45
   followWaves: 0.8
   type: 3
-  lightDamage: 0.25
-  radius: 3.4
+  lightDamage: 0.15
+  radius: 2.6
   visual: {fileID: 3479845476628276751}
   rollSpeed: 0
   spinSpeed: 0
   sidewaysDrift: {x: 0, y: 0}
   behaviour: 0
-  crossSpeed: {x: 0.4, y: 2.6}
-  weave: 1.6
+  crossSpeed: {x: 0.6, y: 2.2}
+  weave: 1.4
   weaveFrequency: 0.18
   leapChance: 0.45
-  leapHeight: 4.2
-  leapDuration: 1.8
-  safeHeight: 1.8
+  leapHeight: 3.2
+  leapDuration: 1.6
+  safeHeight: 1.5
+  bodyLength: 2.8
   glowLight: {fileID: 1082976429764343911}
   hitCollider: {fileID: 8610436427681930851}
+  telegraph: {fileID: 0}
 --- !u!114 &7476890434858199329
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -292,7 +294,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 75572a10d395c4e298c0ddf799fbe491, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.WaterDisturber
-  radius: 4.4
+  radius: 3.4
   strength: 0.9
   pulse: 0
   pulseSpeed: 2
@@ -330,7 +332,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.75, y: 1.75, z: 1.75}
+  m_LocalScale: {x: 1.2, y: 1.2, z: 1.2}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 7490981628490424117}

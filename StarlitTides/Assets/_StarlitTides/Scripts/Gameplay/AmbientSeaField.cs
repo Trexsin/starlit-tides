@@ -16,6 +16,11 @@
 //
 // Every ~45 s of play a SET PIECE floats past on one side (a ring of lanterns,
 // a glowing coral arch). The density follows the quality preset.
+//
+// Phase 9: each zone of the voyage has its own SCENERY SET (coral and glowing
+// algae on the reef, sea stacks in the sunset channel, icebergs in the orca
+// strait...). VoyageDirector calls SetScenerySet(); the old scenery simply
+// drifts away behind the boat while the new set appears on the horizon.
 
 using System;
 using UnityEngine;
@@ -39,7 +44,19 @@ namespace StarlitTides
             [HideInInspector] public float travelled;
         }
 
+        [Serializable]
+        public class ScenerySet
+        {
+            public string name = "Set";
+            public Band[] bands = new Band[0];
+        }
+
+        public static AmbientSeaField Instance { get; private set; }
+
+        [Tooltip("The default scenery (Lantern Bay, the menu and the intro).")]
         public Band[] bands = new Band[0];
+        [Tooltip("Phase 9: scenery per voyage zone. Index 0 = the default bands above.")]
+        public ScenerySet[] zoneSets = new ScenerySet[0];
         public float firstZ = -25f;
 
         [Header("Set pieces (during play)")]
@@ -54,6 +71,36 @@ namespace StarlitTides
 
         float density = 1f;
         float setPieceTimer;
+        int activeSet = 0;
+
+        Band[] ActiveBands
+        {
+            get
+            {
+                if (activeSet > 0 && zoneSets != null && activeSet < zoneSets.Length && zoneSets[activeSet] != null)
+                    return zoneSets[activeSet].bands;
+                return bands;
+            }
+        }
+
+        void Awake()
+        {
+            Instance = this;
+        }
+
+        void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        /// <summary>Switches the scenery to a zone's set (0 or less = the default bands).</summary>
+        public void SetScenerySet(int index)
+        {
+            index = Mathf.Max(0, index);
+            if (index == activeSet) return;
+            activeSet = index;
+            foreach (Band b in ActiveBands) b.travelled = 0f;
+        }
 
         void Start()
         {
@@ -67,6 +114,13 @@ namespace StarlitTides
                 for (float z = firstZ; z <= b.spawnZ; z += Spacing(b)) SpawnRow(b, z);
             }
             foreach (GameObject p in setPieces) PoolManager.Prewarm(p, 1);
+            // The zone sets only start spawning when their zone comes, so a few each is plenty.
+            if (zoneSets != null)
+                foreach (ScenerySet set in zoneSets)
+                    if (set != null && set.bands != null)
+                        foreach (Band b in set.bands)
+                            if (b.prefabs != null)
+                                foreach (GameObject p in b.prefabs) if (p != null) PoolManager.Prewarm(p, 3);
             setPieceTimer = Random.Range(setPieceInterval.x * 0.5f, setPieceInterval.y);
         }
 
@@ -86,7 +140,7 @@ namespace StarlitTides
             float tide = OceanController.Instance != null ? OceanController.Instance.tideSpeed : 6f;
             float step = tide * Time.deltaTime;
 
-            foreach (Band b in bands)
+            foreach (Band b in ActiveBands)
             {
                 if (b.prefabs == null || b.prefabs.Length == 0) continue;
                 b.travelled += step;
@@ -99,6 +153,8 @@ namespace StarlitTides
             }
 
             GameManager game = GameManager.Instance;
+            // Back on the menu: the bay's own scenery again.
+            if (game != null && game.State == GameState.Menu && activeSet != 0) SetScenerySet(0);
             if (setPieces.Length > 0 && game != null && game.IsPlaying)
             {
                 setPieceTimer -= Time.deltaTime;

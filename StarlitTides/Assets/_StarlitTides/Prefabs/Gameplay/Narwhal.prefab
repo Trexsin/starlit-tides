@@ -312,8 +312,10 @@ MonoBehaviour:
   leapHeight: 2.6
   leapDuration: 1.3
   safeHeight: 1.1
+  bodyLength: 3
   glowLight: {fileID: 7765491371959046913}
   hitCollider: {fileID: 3515986536167122043}
+  telegraph: {fileID: 0}
 --- !u!114 &1369142028390476428
 MonoBehaviour:
   m_ObjectHideFlags: 0

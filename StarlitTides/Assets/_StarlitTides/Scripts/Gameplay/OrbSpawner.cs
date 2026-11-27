@@ -7,6 +7,11 @@
 //   2 Zigzag  - a weaving trail
 //   3 Cluster - a tight bunch
 // An orb is skipped if it would land on top of an obstacle.
+//
+// Phase 9: orbs used to offer ~10x the light the meter drains, so nothing could
+// go wrong. Now the voyage sets the orb value, group size and spacing per zone:
+// early you can miss half of them, late you need nearly all of them. There is
+// also a cap on how many orbs can be out at once.
 
 using UnityEngine;
 
@@ -22,6 +27,9 @@ namespace StarlitTides
         public int prewarmCount = 60;
         [Tooltip("Orb groups scale with the lane width to this power (1 = same density as obstacles).")]
         [Range(0f, 1f)] public float densityPower = 0.75f;
+
+        [Tooltip("Never more orbs than this in the sea at once.")]
+        public int maxActiveOrbs = 14;
 
         float timer;
 
@@ -42,7 +50,10 @@ namespace StarlitTides
             if (DifficultyManager.Instance != null) interval = DifficultyManager.Instance.OrbGroupInterval;
             // A wider lane gets more orb groups, but a little less than obstacles:
             // groups are long trails, so they already cover more of the sea.
-            timer = interval / Mathf.Pow(PlayArea.DensityScale, densityPower) * Random.Range(0.8f, 1.2f);
+            // (The voyage's numbers are tuned for the wide lane already.)
+            float density = DifficultyManager.UsesVoyage ? 1f : Mathf.Pow(PlayArea.DensityScale, densityPower);
+            timer = interval / density * Random.Range(0.85f, 1.15f);
+            if (ActiveOrbs() >= maxActiveOrbs) return;
 
             SpawnGroup();
         }
@@ -50,7 +61,9 @@ namespace StarlitTides
         void SpawnGroup()
         {
             int pattern = Random.Range(0, 4);
-            int count = Random.Range(4, 8);
+            Vector2Int range = DifficultyManager.Instance != null ? DifficultyManager.Instance.OrbsPerGroup : new Vector2Int(4, 7);
+            int count = Random.Range(range.x, range.y + 1);
+            float value = DifficultyManager.Instance != null ? DifficultyManager.Instance.OrbValue : -1f;
             float halfWidth = PlayArea.OrbHalfWidth;
             float startX = Random.Range(-halfWidth, halfWidth);
 
@@ -84,8 +97,18 @@ namespace StarlitTides
                 Vector3 position = new Vector3(x, 0f, z);
                 if (IsNearObstacle(position)) continue;
 
-                PoolManager.Spawn(orbPrefab, position, Quaternion.identity);
+                GameObject spawned = PoolManager.Spawn(orbPrefab, position, Quaternion.identity);
+                Orb orb = spawned != null ? spawned.GetComponent<Orb>() : null;
+                if (orb != null && value > 0f) orb.lightValue = value;
             }
+        }
+
+        static int ActiveOrbs()
+        {
+            int n = 0;
+            foreach (DriftingObject thing in DriftingObject.Active)
+                if (thing is Orb) n++;
+            return n;
         }
 
         bool IsNearObstacle(Vector3 position)

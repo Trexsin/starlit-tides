@@ -94,6 +94,11 @@ namespace StarlitTides
             lightIntensity = 1.4f
         };
 
+        [Header("Voyage zone look (Phase 9, set by VoyageDirector)")]
+        [Tooltip("The current zone's fog, ambient and moonlight. Blended over the night look by zoneLookWeight.")]
+        public AtmospherePreset zoneLook;
+        [Range(0f, 1f)] public float zoneLookWeight = 0f;
+
         float skyTime;
         Color lastAmbient = Color.clear;
         Quaternion nightRotation;   // the moonlight's direction at night
@@ -131,7 +136,8 @@ namespace StarlitTides
             if (lightning > 0f) lightning = Mathf.Max(0f, lightning - lightningDecay * dt);
 
             // Blend night -> storm, then sunset on top.
-            AtmospherePreset look = Blend(night, stormPreset, storm);
+            AtmospherePreset look = Blend(night, zoneLook, zoneLookWeight);
+            look = Blend(look, stormPreset, storm);
             look = Blend(look, sunsetPreset, sunset);
 
             ApplyFogAndAmbient(look);
@@ -210,6 +216,8 @@ namespace StarlitTides
             Shader.SetGlobalFloat("_LightningFlash", lightning);
             Shader.SetGlobalFloat("_SkyTime", skyTime);
         }
+
+        public static AtmospherePreset Lerp(AtmospherePreset a, AtmospherePreset b, float t) { return Blend(a, b, t); }
 
         static AtmospherePreset Blend(AtmospherePreset a, AtmospherePreset b, float t)
         {

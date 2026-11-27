@@ -4,7 +4,12 @@
 // more common. Two rules keep it fair:
 //   - obstacles never overlap each other
 //   - there's always a gap wide enough for the boat to get through
-// Nothing spawns during the calm grace period at the start of a run.
+// Nothing spawns during the calm grace period at the start of a run, or the
+// short rest that opens each zone of the voyage (Phase 9).
+//
+// Phase 9: with the voyage, rocks and logs are FILLER at a real-seconds
+// interval set per zone, and sea creatures never come from here: the
+// EncounterDirector plans them, one encounter at a time.
 
 using System.Collections.Generic;
 using UnityEngine;
@@ -39,16 +44,19 @@ namespace StarlitTides
         void Update()
         {
             GameManager game = GameManager.Instance;
+            DifficultyManager difficulty = DifficultyManager.Instance;
             if (game != null && (!game.IsPlaying || game.InGracePeriod)) return;
+            if (difficulty != null && difficulty.Calm) return;
 
             timer -= Time.deltaTime;
             if (timer > 0f) return;
 
-            DifficultyManager difficulty = DifficultyManager.Instance;
             float interval = 1.4f;
             if (difficulty != null) interval = difficulty.ObstacleInterval;
             // A wider lane needs more obstacles to stay just as busy (see PlayArea).
-            timer = interval / PlayArea.DensityScale * Random.Range(0.7f, 1.3f);
+            // (The voyage's intervals are already tuned for the wide lane.)
+            float density = DifficultyManager.UsesVoyage ? 1f : PlayArea.DensityScale;
+            timer = interval / density * Random.Range(0.7f, 1.3f);
 
             GameObject prefab = ChoosePrefab(difficulty);
             if (prefab == null) return;

@@ -9,6 +9,7 @@
 //
 // Taller screens (4:3, 16:10) get a slightly taller view, up to maxVerticalFov.
 // Dashing adds a small FOV kick, which reads as a burst of speed.
+// Phase 9: the view also widens as the tide gets faster (SpeedFx.FovBoost).
 
 using Unity.Cinemachine;
 using UnityEngine;
@@ -49,8 +50,12 @@ namespace StarlitTides
             float targetKick = boat != null && boat.IsDashing ? dashFovKick : 0f;
             kick = Mathf.Lerp(kick, targetKick, 1f - Mathf.Exp(-kickSharpness * Time.deltaTime));
 
+            // (With SpeedFx in the scene, the dash punch comes from its Kick instead.)
+            float speed = 0f;
+            if (SpeedFx.Instance != null) { speed = SpeedFx.Instance.FovBoost; kick = 0f; }
+
             LensSettings lens = cam.Lens;
-            lens.FieldOfView = vertical + kick;
+            lens.FieldOfView = Mathf.Min(vertical + kick + speed, maxVerticalFov + 10f);
             cam.Lens = lens;
         }
     }

@@ -36,15 +36,34 @@ namespace StarlitTides
         public TextMeshProUGUI infoText;
         public TextMeshProUGUI fpsText;
 
+        [Header("Voyage zone banner (Phase 9)")]
+        public TextMeshProUGUI zoneTitle;
+        public TextMeshProUGUI zoneSubtitle;
+        public float bannerTime = 4.2f;
+
+        public static HudView Instance { get; private set; }
+
         static readonly Color FullColor = new Color(0.35f, 0.95f, 1f);
         static readonly Color LowColor = new Color(1f, 0.35f, 0.35f);
 
         float shownScore;
         float popupTime = -10f;
         float fps;
+        float bannerStart = -100f;
+
+        void Awake()
+        {
+            Instance = this;
+        }
+
+        void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
 
         void OnEnable()
         {
+            VoyageDirector.OnZoneStarted += HandleZone;
             NearMissDetector.OnNearMiss += HandleNearMiss;
             PowerUpManager.OnStarburstStarted += HandleStarburst;
             WeatherManager.OnWeatherChanged += HandleWeather;
@@ -54,6 +73,7 @@ namespace StarlitTides
 
         void OnDisable()
         {
+            VoyageDirector.OnZoneStarted -= HandleZone;
             NearMissDetector.OnNearMiss -= HandleNearMiss;
             PowerUpManager.OnStarburstStarted -= HandleStarburst;
             WeatherManager.OnWeatherChanged -= HandleWeather;
@@ -67,11 +87,23 @@ namespace StarlitTides
         void HandleComboLost(int combo) { if (combo >= 5) Popup("Combo lost"); }
         void HandleWeather(Weather weather)
         {
+            // With the voyage, the zone banner already says what's coming.
+            if (VoyageDirector.Instance != null) return;
             if (weather == Weather.Storm) Popup("A storm is rolling in...");
             if (weather == Weather.Aurora) Popup("The aurora awakens");
         }
 
-        void Popup(string message)
+        void HandleZone(VoyageDirector.Zone zone, int voyage)
+        {
+            if (zoneTitle == null) return;
+            VoyageDirector director = VoyageDirector.Instance;
+            int number = director != null ? director.ZoneIndex + 1 : 1;
+            zoneTitle.text = (voyage > 1 ? "VOYAGE " + voyage + "  \u2022  " : "") + "ZONE " + number + "\n<size=135%>" + zone.name.ToUpper() + "</size>";
+            if (zoneSubtitle != null) zoneSubtitle.text = zone.subtitle;
+            bannerStart = Time.unscaledTime;
+        }
+
+        public void Popup(string message)
         {
             if (popupText == null) return;
             popupText.text = message;
@@ -144,6 +176,17 @@ namespace StarlitTides
             popupText.transform.localScale = Vector3.one * (1f + Mathf.Max(0f, 0.15f - age) * 2f);
 
             string weather = WeatherManager.Instance != null ? WeatherManager.Instance.Current.ToString() : "";
+            if (VoyageDirector.Instance != null) weather = VoyageDirector.Instance.Current.name;
+
+            // Zone banner: fades in, holds, fades out.
+            if (zoneTitle != null)
+            {
+                float b = Time.unscaledTime - bannerStart;
+                float a = b < 0.4f ? b / 0.4f : 1f - Mathf.Clamp01((b - bannerTime) / 0.8f);
+                zoneTitle.alpha = Mathf.Clamp01(a);
+                zoneTitle.transform.localScale = Vector3.one * (1f + Mathf.Max(0f, 0.4f - b) * 0.25f);
+                if (zoneSubtitle != null) zoneSubtitle.alpha = Mathf.Clamp01(a) * 0.9f;
+            }
             BoatController boat = BoatController.Instance;
             string dash = boat != null && boat.DashCooldown01 >= 1f ? "DASH READY" : "dash...";
             infoText.text = weather.ToUpper() + "   •   " + dash + "   •   P  PHOTO";

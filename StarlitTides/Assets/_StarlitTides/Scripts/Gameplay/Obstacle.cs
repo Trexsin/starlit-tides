@@ -65,15 +65,19 @@ namespace StarlitTides
             if (visual != null && rollSpeed != 0f) visual.Rotate(rollSpeed * dt, 0f, 0f, Space.Self);
             if (spinSpeed != 0f) transform.Rotate(0f, spinSpeed * dt, 0f, Space.World);
 
-            // Track how close the boat gets (ignoring height).
+            // Track how close the boat gets (ignoring height), for the near-miss bonus.
             BoatController boat = BoatController.Instance;
-            if (boat != null)
+            if (boat != null && TracksApproach)
             {
                 Vector3 offset = boat.transform.position - transform.position;
                 offset.y = 0f;
                 ClosestApproach = Mathf.Min(ClosestApproach, offset.magnitude - radius);
             }
         }
+
+        /// <summary>False while the obstacle can't hit you (a submerged turtle, a stalking orca),
+        /// so slipping past it there doesn't count as a near miss.</summary>
+        protected virtual bool TracksApproach { get { return true; } }
 
         // Called by the boat when it crashes into this obstacle.
         public virtual void OnBoatHit(BoatController boat)

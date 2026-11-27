@@ -31,7 +31,16 @@ namespace StarlitTides
             }
 
             Vector3 p = boat.position;
-            transform.position = new Vector3(p.x * followX, p.y * followY, p.z);
+            Vector3 anchor = new Vector3(p.x * followX, p.y * followY, p.z);
+
+            // Phase 9: a light, smooth shake when the boat is fast (SpeedFx).
+            if (SpeedFx.Instance != null && Time.timeScale > 0f)
+            {
+                float amount = SpeedFx.Instance.Shake;
+                float t = Time.time * 9f;
+                anchor += new Vector3(Mathf.PerlinNoise(t, 0.3f) - 0.5f, Mathf.PerlinNoise(0.7f, t) - 0.5f, 0f) * (2f * amount);
+            }
+            transform.position = anchor;
         }
     }
 }

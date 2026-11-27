@@ -26,7 +26,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.3, y: 1.3, z: 1.3}
+  m_LocalScale: {x: 1.07, y: 1.07, z: 1.07}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3519107939413174539}
@@ -165,8 +165,8 @@ Light:
   serializedVersion: 13
   m_Type: 2
   m_Color: {r: 0.7, g: 0.5, b: 1, a: 1}
-  m_Intensity: 2.6
-  m_Range: 11
+  m_Intensity: 2.4
+  m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.802082
   m_CookieSize2D: {x: 0.5, y: 0.5}
@@ -274,8 +274,8 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 1.3
-  m_Height: 8.58
+  m_Radius: 1.07
+  m_Height: 7.0620003
   m_Direction: 2
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &8935488831866070523
@@ -290,30 +290,32 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef0bb4c1df9aa41bba793e0ab6323b4c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.SeaCreature
-  floatOffset: -0.97499996
+  floatOffset: -0.6420001
   bobAmplitude: 0.05
   bobSpeed: 1.4
   extraDrift: {x: 0, y: 0, z: 0}
   despawnZ: -28
-  despawnX: 45
+  despawnX: 48
   followWaves: 0.8
   type: 3
-  lightDamage: 0.3
-  radius: 4.16
+  lightDamage: 0.35
+  radius: 3.4240003
   visual: {fileID: 3707216876061364056}
   rollSpeed: 0
   spinSpeed: 0
   sidewaysDrift: {x: 0, y: 0}
-  behaviour: 2
+  behaviour: 3
   crossSpeed: {x: 0.5, y: 2.6}
   weave: 0.3
   weaveFrequency: 0.2
   leapChance: 0
-  leapHeight: 4.4
-  leapDuration: 2.1
-  safeHeight: 2.5
+  leapHeight: 1.2
+  leapDuration: 1.2
+  safeHeight: 2.2
+  bodyLength: 7.4900002
   glowLight: {fileID: 1080858379689763877}
   hitCollider: {fileID: 3576229158018951150}
+  telegraph: {fileID: 0}
 --- !u!114 &3335298883993812185
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -326,7 +328,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 75572a10d395c4e298c0ddf799fbe491, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.WaterDisturber
-  radius: 4.68
+  radius: 3.4240003
   strength: 0.9
   pulse: 0
   pulseSpeed: 2

@@ -37,6 +37,7 @@ namespace StarlitTides.EditorTools
         static Texture2D _dot;
         static Material _rock, _leaves, _bark, _wood, _woodDark, _lanternPaper, _lanternCap, _whaleSkin, _island;
         static Material _glowMint, _glowCyan, _glowWarm, _glowViolet, _glowSpray, _glowWarmSmall;
+        static Material _ice, _coral, _coralGlow, _glowPink, _glowIce;   // Phase 9
 
         [MenuItem("Starlit Tides/11. Build Sea Field", priority = 26)]
         public static void BuildMenu()
@@ -99,6 +100,53 @@ namespace StarlitTides.EditorTools
             };
             field.setPieces = new[] { ring, glowArch };
 
+            // ---- Phase 9: a scenery set for each zone of the voyage ----
+            GameObject iceSmall = Save(BuildIceberg("Iceberg_Small", 101, 2.2f, 2.6f));
+            GameObject iceMid = Save(BuildIceberg("Iceberg_Medium", 102, 5f, 7f));
+            GameObject iceMid2 = Save(BuildIceberg("Iceberg_Medium_B", 103, 6.5f, 5f));
+            GameObject iceGiant = Save(BuildIceberg("Iceberg_Giant", 104, 14f, 22f));
+            GameObject coralPink = Save(BuildCoral("Coral_Pink", 111, _coral, _glowPink));
+            GameObject coralGlow = Save(BuildCoral("Coral_Glow", 112, _coralGlow, _glowMint));
+            GameObject algaePink = Save(BuildAlgae("AlgaeBloom_Pink", _glowPink, 29));
+            AmbientSeaField.Band B(string n, GameObject[] p, float from, float to, float spacing, float z)
+            {
+                return new AmbientSeaField.Band { name = n, prefabs = p, distance = new Vector2(from, to), spacing = spacing, spawnZ = z };
+            }
+            field.zoneSets = new[]
+            {
+                new AmbientSeaField.ScenerySet { name = "0 Lantern Bay (the default bands)" },
+                new AmbientSeaField.ScenerySet { name = "1 Glow Reef", bands = new[]
+                {
+                    B("Near: coral and algae", new[] { coralPink, coralGlow, algaeMint, algaePink, algaeCyan }, 28f, 52f, 11f, 190f),
+                    B("Mid: coral arches", new[] { glowArch, coralGlow, coralPink, algaePink }, 55f, 92f, 24f, 230f),
+                    B("Far: spouts", new[] { whale, stackC, whale }, 98f, 145f, 46f, 280f),
+                } },
+                new AmbientSeaField.ScenerySet { name = "2 Sunset Channel", bands = new[]
+                {
+                    B("Near: lanterns", new[] { lanterns, rocks, lanterns, algaeCyan }, 28f, 50f, 14f, 190f),
+                    B("Mid: stacks and boats", new[] { stackA, stackC, arch, boat, boat }, 55f, 92f, 24f, 230f),
+                    B("Far: big stacks", new[] { stackBig, stackB, whale }, 98f, 145f, 40f, 280f),
+                } },
+                new AmbientSeaField.ScenerySet { name = "3 Orca Strait", bands = new[]
+                {
+                    B("Near: ice", new[] { iceSmall, iceSmall, algaeCyan }, 28f, 50f, 12f, 190f),
+                    B("Mid: icebergs", new[] { iceMid, iceMid2, iceSmall }, 55f, 95f, 22f, 230f),
+                    B("Far: giant icebergs", new[] { iceGiant, whale, iceMid }, 100f, 150f, 42f, 280f),
+                } },
+                new AmbientSeaField.ScenerySet { name = "4 Storm Reach", bands = new[]
+                {
+                    B("Near: rocks", new[] { rocks, algaeCyan, rocks }, 28f, 50f, 16f, 190f),
+                    B("Mid: dark stacks", new[] { stackA, stackB, arch }, 55f, 92f, 26f, 230f),
+                    B("Far", new[] { stackBig, whale }, 98f, 145f, 44f, 280f),
+                } },
+                new AmbientSeaField.ScenerySet { name = "5 Aurora Deep", bands = new[]
+                {
+                    B("Near: ice and glow", new[] { iceSmall, algaeMint, algaePink, coralGlow }, 28f, 52f, 11f, 190f),
+                    B("Mid: icebergs and arches", new[] { iceMid, glowArch, iceMid2 }, 55f, 95f, 22f, 230f),
+                    B("Far", new[] { iceGiant, stackBig, whale }, 100f, 150f, 42f, 280f),
+                } },
+            };
+
             BuildHorizon(root);
 
             AssetDatabase.SaveAssets();
@@ -129,6 +177,14 @@ namespace StarlitTides.EditorTools
             _glowWarmSmall = Glow("M_GlowShipLight", new Color(2.4f, 1.3f, 0.5f));
             _glowViolet = Glow("M_GlowCoral", new Color(1.1f, 0.5f, 2.0f));
             _glowSpray = Glow("M_GlowSpray", new Color(0.55f, 0.85f, 1.1f));
+
+            // Phase 9: ice and coral for the new zones
+            _ice = SaveMat(StylizedMaterials.Create("M_Iceberg", new Color(0.7f, 0.86f, 0.97f), 0.65f, StylizedMaterials.Kind.Natural));
+            StylizedMaterials.SetAccent(_ice, new Color(0.92f, 0.97f, 1f));                          // snow on top
+            _coral = SaveMat(StylizedMaterials.Create("M_CoralPink", new Color(0.95f, 0.38f, 0.52f), 0.35f, StylizedMaterials.Kind.Prop));
+            _coralGlow = SaveMat(StylizedMaterials.Create("M_CoralGlow", new Color(0.1f, 0.55f, 0.45f), 0.35f, StylizedMaterials.Kind.Glow, new Color(0.1f, 0.9f, 0.6f)));
+            _glowPink = Glow("M_GlowAlgaePink", new Color(1.0f, 0.3f, 0.75f));
+            _glowIce = Glow("M_GlowIce", new Color(0.35f, 0.75f, 1.1f));
         }
 
         static Material Glow(string name, Color tint)
@@ -236,6 +292,78 @@ namespace StarlitTides.EditorTools
             mb.Cylinder(1, Vector3.down * 0.04f, 0.14f, 0.14f, 0.05f, 14, true, true);   // base ring
             mb.Cylinder(1, Vector3.up * 0.47f, 0.14f, 0.1f, 0.05f, 14, true, false);     // top ring
             return mb.ToMesh("PaperLantern");
+        }
+
+        // Phase 9: an iceberg, a chunky, faceted block of ice with snow on top and a
+        // cold blue glow in the water around it. Most of it is under water.
+        static GameObject BuildIceberg(string name, int seed, float radius, float height)
+        {
+            var rng = new System.Random(seed);
+            float R(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+            var root = new GameObject(name);
+            Mesh main = SaveMesh(ProcMesh.Rock(seed * 9, 1f, 0.28f, new Vector3(radius, height * 0.5f, radius * R(0.7f, 1f)), 2), name + "_Main.asset");
+            GameObject body = MeshChild("Ice", root.transform, main, _ice);
+            body.transform.localPosition = Vector3.up * (height * 0.25f);
+            NoShadows(body);
+            int chunks = radius > 4f ? 3 : 1;
+            for (int i = 0; i < chunks; i++)
+            {
+                float cr = radius * R(0.35f, 0.55f);
+                Mesh c = SaveMesh(ProcMesh.Rock(seed * 9 + i + 1, 1f, 0.3f, new Vector3(cr, cr * R(0.6f, 1.4f), cr), 2), name + "_Chunk" + i + ".asset");
+                GameObject chunk = MeshChild("Chunk_" + i, root.transform, c, _ice);
+                float a = R(0f, Mathf.PI * 2f);
+                chunk.transform.localPosition = new Vector3(Mathf.Cos(a) * radius * 0.9f, cr * 0.2f, Mathf.Sin(a) * radius * 0.9f);
+                chunk.transform.localRotation = Quaternion.Euler(R(-15f, 15f), R(0f, 360f), R(-15f, 15f));
+                NoShadows(chunk);
+            }
+            Transform g = Child("Glow", root.transform);
+            GameObject pool = MeshChild("Pool", g, _quad, _glowIce);
+            pool.transform.localPosition = Vector3.up * 0.06f;
+            pool.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            pool.transform.localScale = Vector3.one * radius * 3.4f;
+            NoShadows(pool);
+            var d = root.AddComponent<SeaDecor>();
+            d.glow = g; d.pulseSpeed = 0.5f; d.pulseAmount = 0.1f;
+            d.floatOffset = -height * 0.08f; d.followWaves = 0.25f; d.bobAmplitude = 0.08f; d.bobSpeed = 0.4f;
+            d.rockAngle = radius > 8f ? 0.4f : 1.5f;
+            d.scaleRange = new Vector2(0.85f, 1.25f);
+            d.maxGroundHeight = -2f;
+            Finish(d, 260f);
+            return root;
+        }
+
+        // Phase 9: a reef of finger coral breaking the surface, with glowing algae around it.
+        static GameObject BuildCoral(string name, int seed, Material coral, Material glow)
+        {
+            var rng = new System.Random(seed);
+            float R(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+            var root = new GameObject(name);
+            int fingers = 9;
+            for (int i = 0; i < fingers; i++)
+            {
+                float h = R(0.9f, 2.6f), r = R(0.22f, 0.42f);
+                Mesh m = SaveMesh(ProcMesh.Rock(seed * 11 + i, 1f, 0.25f, new Vector3(r, h, r), 2), name + "_Finger" + i + ".asset");
+                GameObject f = MeshChild("Finger_" + i, root.transform, m, coral);
+                float a = R(0f, Mathf.PI * 2f), d0 = R(0f, 2.4f);
+                f.transform.localPosition = new Vector3(Mathf.Cos(a) * d0, h * 0.3f, Mathf.Sin(a) * d0);
+                f.transform.localRotation = Quaternion.Euler(R(-18f, 18f), R(0f, 360f), R(-18f, 18f));
+                NoShadows(f);
+            }
+            Transform g = Child("Glow", root.transform);
+            for (int i = 0; i < 3; i++)
+            {
+                GameObject patch = MeshChild("Patch_" + i, g, _quad, glow);
+                patch.transform.localPosition = new Vector3(R(-2f, 2f), 0.05f + i * 0.01f, R(-2f, 2f));
+                patch.transform.localRotation = Quaternion.Euler(90f, R(0f, 360f), 0f);
+                patch.transform.localScale = new Vector3(R(4f, 7f), R(3f, 5f), 1f);
+                NoShadows(patch);
+            }
+            var dec = root.AddComponent<SeaDecor>();
+            dec.glow = g; dec.pulseSpeed = 0.9f; dec.pulseAmount = 0.15f;
+            dec.floatOffset = -0.3f; dec.followWaves = 0.1f; dec.bobAmplitude = 0f;
+            dec.scaleRange = new Vector2(0.8f, 1.4f);
+            Finish(dec);
+            return root;
         }
 
         // A few half-sunk mossy rocks: no glow (scenery, not an obstacle).

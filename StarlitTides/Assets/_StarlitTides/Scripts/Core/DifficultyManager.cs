@@ -1,9 +1,14 @@
 // DifficultyManager: makes the game harder the longer you survive.
 //
-// Everything depends on one number, Level:
-//   0 at the start of a run, 1 after "rampDuration" seconds (4 minutes).
-// Each setting below is a (start, max) pair and we blend between them using Level.
-// The ramp curve keeps the first minute relaxed and gets steeper after that.
+// Phase 9: with a VoyageDirector in the scene, every number comes from the
+// current zone of the voyage (Lantern Bay -> Glow Reef -> ... -> Aurora Deep,
+// then faster loops), so the game gets harder in clear steps and each zone has
+// its own rules. Level runs 0 -> 1 across the first voyage (the music uses it).
+// During a big creature encounter the filler rocks and logs thin out
+// (FillerScale), so the creature is the challenge, not the crowd.
+//
+// Without a VoyageDirector (old scenes) it falls back to the Phase 3 ramp:
+// Level 0 -> 1 over "rampDuration" seconds, each setting a (start, max) pair.
 
 using UnityEngine;
 
@@ -37,13 +42,26 @@ namespace StarlitTides
         // 0 = start of a run, 1 = hardest.
         public float Level { get; private set; }
 
-        public float TideSpeed { get { return Mathf.Lerp(tideSpeed.x, tideSpeed.y, Level); } }
-        public float DrainPerSecond { get { return Mathf.Lerp(drainPerSecond.x, drainPerSecond.y, Level); } }
-        public float ObstacleInterval { get { return Mathf.Lerp(obstacleInterval.x, obstacleInterval.y, Level); } }
-        public float OrbGroupInterval { get { return Mathf.Lerp(orbGroupInterval.x, orbGroupInterval.y, Level); } }
-        public float JellyfishChance { get { return Mathf.Lerp(jellyfishChance.x, jellyfishChance.y, Level); } }
-        public float LogChance { get { return Mathf.Lerp(logChance.x, logChance.y, Level); } }
-        public float CreatureChance { get { return Mathf.Lerp(creatureChance.x, creatureChance.y, Level); } }
+        static VoyageDirector Voyage { get { return VoyageDirector.Instance; } }
+        /// <summary>True when the voyage (Phase 9) sets the numbers.</summary>
+        public static bool UsesVoyage { get { return VoyageDirector.Instance != null; } }
+
+        /// <summary>1 normally; lower while a big creature encounter is on (fewer rocks and logs).</summary>
+        public float FillerScale { get; set; } = 1f;
+
+        public float TideSpeed { get { return Voyage != null ? Voyage.TideSpeed : Mathf.Lerp(tideSpeed.x, tideSpeed.y, Level); } }
+        public float DrainPerSecond { get { return Voyage != null ? Voyage.DrainPerSecond : Mathf.Lerp(drainPerSecond.x, drainPerSecond.y, Level); } }
+        /// <summary>Seconds between rocks/logs. With the voyage these are real seconds (not scaled by the lane width).</summary>
+        public float ObstacleInterval { get { return Voyage != null ? Voyage.FillerInterval / Mathf.Max(0.1f, FillerScale) : Mathf.Lerp(obstacleInterval.x, obstacleInterval.y, Level); } }
+        public float OrbGroupInterval { get { return Voyage != null ? Voyage.OrbGroupInterval : Mathf.Lerp(orbGroupInterval.x, orbGroupInterval.y, Level); } }
+        public float OrbValue { get { return Voyage != null ? Voyage.OrbValue : 0.12f; } }
+        public Vector2Int OrbsPerGroup { get { return Voyage != null ? Voyage.Current.orbsPerGroup : new Vector2Int(4, 7); } }
+        public float JellyfishChance { get { return Voyage != null ? Voyage.Current.jellyChance : Mathf.Lerp(jellyfishChance.x, jellyfishChance.y, Level); } }
+        public float LogChance { get { return Voyage != null ? Voyage.Current.logChance : Mathf.Lerp(logChance.x, logChance.y, Level); } }
+        // With the voyage, creatures only come from planned encounters (EncounterDirector).
+        public float CreatureChance { get { return Voyage != null ? 0f : Mathf.Lerp(creatureChance.x, creatureChance.y, Level); } }
+        /// <summary>No new hazards: the grace period, or the calm rest that opens each zone.</summary>
+        public bool Calm { get { GameManager g = GameManager.Instance; return (g != null && g.InGracePeriod) || (Voyage != null && Voyage.InRest); } }
 
         void Awake()
         {
@@ -60,9 +78,16 @@ namespace StarlitTides
             GameManager game = GameManager.Instance;
 
             // How far through the ramp we are (0..1), shaped by the curve.
-            float t = 0f;
-            if (game != null) t = Mathf.Clamp01(game.RunTime / rampDuration);
-            Level = Mathf.Clamp01(rampCurve.Evaluate(t));
+            if (Voyage != null)
+            {
+                Level = Mathf.Clamp01(Voyage.Progress);
+            }
+            else
+            {
+                float t = 0f;
+                if (game != null) t = Mathf.Clamp01(game.RunTime / rampDuration);
+                Level = Mathf.Clamp01(rampCurve.Evaluate(t));
+            }
 
             UpdateTideSpeed(game);
         }
@@ -78,7 +103,7 @@ namespace StarlitTides
             if (game != null && game.State == GameState.GameOver) target = idleTideSpeed * 0.5f;
 
             // Change speed gradually so it never feels like a jolt.
-            ocean.tideSpeed = Mathf.MoveTowards(ocean.tideSpeed, target, 4f * Time.deltaTime);
+            ocean.tideSpeed = Mathf.MoveTowards(ocean.tideSpeed, target, 2.5f * Time.deltaTime);
         }
     }
 }

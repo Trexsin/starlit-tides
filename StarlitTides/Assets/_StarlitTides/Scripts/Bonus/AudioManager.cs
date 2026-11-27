@@ -8,6 +8,9 @@
 //   grows), dashing, crashing, near misses, Starburst, thunder (a moment after
 //   each lightning flash), the whale, and game over.
 //
+// Phase 9: the ambience and music are stereo and rebuilt to be calm (see
+// ProceduralAudio). Rain plays quieter, and a soft chime marks each new zone.
+//
 // No audio files needed: if a clip slot below is empty, the sound is generated
 // by ProceduralAudio on a background thread when the game starts. Drag in your
 // own clips (e.g. from Pixabay) to replace any of them.
@@ -43,6 +46,7 @@ namespace StarlitTides
         public AudioClip splash;
         public AudioClip gameOver;
         public AudioClip uiClick;
+        public AudioClip zoneChime;
 
         // Semitone steps of a pentatonic scale: the orb chime climbs these as the combo grows.
         static readonly int[] ComboScale = { 0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24 };
@@ -56,7 +60,8 @@ namespace StarlitTides
         // Generated sample data, filled in on a background thread.
         class Generated
         {
-            public float[] calm, intense, waves, wind, rain, orb, dash, hit, nearMiss, starburst, thunder, whale, splash, gameOver, click;
+            public SoundData calm, intense, waves, wind, rain;
+            public float[] orb, dash, hit, nearMiss, starburst, thunder, whale, splash, gameOver, click, zone;
         }
         Task<Generated> generating;
 
@@ -110,6 +115,7 @@ namespace StarlitTides
             g.splash = ProceduralAudio.Splash(19);
             g.gameOver = ProceduralAudio.GameOverTone();
             g.click = ProceduralAudio.UiClick();
+            g.zone = ProceduralAudio.ZoneChime();
             return g;
         }
 
@@ -117,6 +123,14 @@ namespace StarlitTides
         {
             AudioClip clip = AudioClip.Create(name, samples.Length, 1, ProceduralAudio.SampleRate, false);
             clip.SetData(samples, 0);
+            return clip;
+        }
+
+        static AudioClip ToClip(string name, SoundData sound)
+        {
+            int frames = sound.samples.Length / sound.channels;
+            AudioClip clip = AudioClip.Create(name, frames, sound.channels, ProceduralAudio.SampleRate, false);
+            clip.SetData(sound.samples, 0);
             return clip;
         }
 
@@ -139,6 +153,7 @@ namespace StarlitTides
             if (splash == null) splash = ToClip("Splash", g.splash);
             if (gameOver == null) gameOver = ToClip("Game Over", g.gameOver);
             if (uiClick == null) uiClick = ToClip("UI Click", g.click);
+            if (zoneChime == null) zoneChime = ToClip("Zone Chime", g.zone);
 
             calmSource.clip = musicCalm;
             intenseSource.clip = musicIntense;
@@ -167,6 +182,7 @@ namespace StarlitTides
             WhaleEvent.OnBreach += HandleWhale;
             WhaleEvent.OnSplashDown += HandleSplash;
             GameManager.OnGameOver += HandleGameOver;
+            VoyageDirector.OnZoneStarted += HandleZone;
         }
 
         void OnDisable()
@@ -180,6 +196,7 @@ namespace StarlitTides
             WhaleEvent.OnBreach -= HandleWhale;
             WhaleEvent.OnSplashDown -= HandleSplash;
             GameManager.OnGameOver -= HandleGameOver;
+            VoyageDirector.OnZoneStarted -= HandleZone;
         }
 
         void Update()
@@ -213,9 +230,9 @@ namespace StarlitTides
             intenseSource.volume = musicVolume * intensity;
 
             float waveScale = OceanController.Instance != null ? OceanController.Instance.waveScale : 1f;
-            wavesSource.volume = ambienceVolume * Mathf.Clamp01(0.45f + waveScale * 0.25f);
-            windSource.volume = ambienceVolume * (0.15f + storm * 0.6f);
-            rainSource.volume = ambienceVolume * storm * storm;
+            wavesSource.volume = ambienceVolume * Mathf.Clamp01(0.5f + waveScale * 0.2f);
+            windSource.volume = ambienceVolume * (0.1f + storm * 0.4f);
+            rainSource.volume = ambienceVolume * storm * storm * 0.6f;
         }
 
         public void PlaySfx(AudioClip clip, float volume, float pitch = 1f)
@@ -231,7 +248,7 @@ namespace StarlitTides
         {
             int combo = ComboSystem.Instance != null ? ComboSystem.Instance.Combo : 0;
             int step = ComboScale[Mathf.Clamp(combo, 0, ComboScale.Length - 1)];
-            PlaySfx(orbChime, 0.6f, Mathf.Pow(2f, step / 12f));
+            PlaySfx(orbChime, 0.5f, Mathf.Pow(2f, step / 12f));
         }
 
         // Menu buttons call this.
@@ -244,6 +261,11 @@ namespace StarlitTides
         void HandleWhale() { PlaySfx(whaleCall, 0.9f); }
         void HandleSplash() { PlaySfx(splash, 1f); }
         void HandleGameOver() { PlaySfx(gameOver, 0.7f); }
+        void HandleZone(VoyageDirector.Zone zone, int voyage)
+        {
+            if (VoyageDirector.Instance != null && VoyageDirector.Instance.Stage == 0) return;
+            PlaySfx(zoneChime, 0.55f);
+        }
 
         void HandleLightning(float strength)
         {
@@ -254,7 +276,7 @@ namespace StarlitTides
         IEnumerator ThunderAfterDelay(float strength)
         {
             yield return new WaitForSeconds(Random.Range(0.3f, 1.4f));
-            PlaySfx(thunder, 0.6f + strength * 0.4f, Random.Range(0.85f, 1.05f));
+            PlaySfx(thunder, 0.4f + strength * 0.3f, Random.Range(0.85f, 1.0f));
         }
     }
 }

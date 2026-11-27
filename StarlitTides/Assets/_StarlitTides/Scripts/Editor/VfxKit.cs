@@ -537,6 +537,119 @@ namespace StarlitTides.EditorTools
         }
 
         // ==================================================================
+        // PHASE 9: CREATURE WARNINGS AND SPEED EFFECTS (looping, not pooled)
+        // ==================================================================
+
+        static ParticleSystem Looping(string name, Transform parent, Material mat, ParticleSystemRenderMode mode = ParticleSystemRenderMode.Billboard)
+        {
+            var ps = Sys(name, parent, mat, mode);
+            var m = ps.main; m.loop = true; m.duration = 2f; m.playOnAwake = false;
+            // Warnings must never pause off-screen (a culled bubble net would be empty when it scrolls into view).
+            m.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+            return ps;
+        }
+
+        // The humpback's bubble net: a glowing ring pulsing on the water and
+        // bubbles rising all round its edge. Local space, so it drifts with the
+        // whale (and the tide). The creature moves it to the surface each frame.
+        public static ParticleSystem BubbleRing(Transform parent, float radius)
+        {
+            Ensure();
+            var ring = Looping("Bubble Net", parent, RingMat("M_VfxBubbleNet", new Color(1.2f, 3.6f, 4.2f)), ParticleSystemRenderMode.HorizontalBillboard);
+            var m = ring.main; m.simulationSpace = ParticleSystemSimulationSpace.Local; m.startLifetime = 1.1f; m.startSpeed = 0f;
+            m.startSize = radius * 2.3f; m.maxParticles = 8;
+            var e = ring.emission; e.rateOverTime = 2.6f;
+            SizeLife(ring, Curve(0f, 0.8f, 1f, 1f));
+            ColorLife(ring, Grad(new[] { White, White }, 0f, 0f, 0.2f, 1f, 1f, 0f));
+
+            var bubbles = Looping("Bubbles", ring.transform, Mat("M_VfxBubble", Sparkle, new Color(1.2f, 2.4f, 2.6f), false, 2f, 0.2f));
+            var bm = bubbles.main; bm.simulationSpace = ParticleSystemSimulationSpace.Local; bm.startLifetime = R(0.7f, 1.4f);
+            bm.startSpeed = R(0.5f, 1.6f); bm.startSize = R(0.5f, 1.1f); bm.maxParticles = 500; bm.startRotation = R(0f, Mathf.PI * 2f);
+            var be = bubbles.emission; be.rateOverTime = 200f;
+            Shape(bubbles, ParticleSystemShapeType.Cone, radius, 4f, new Vector3(-90f, 0f, 0f));
+            var sh = bubbles.shape; sh.radiusThickness = 0.08f;
+            SizeLife(bubbles, Curve(0f, 0.3f, 0.2f, 1f, 1f, 0.2f));
+            ColorLife(bubbles, Grad(new[] { White, Cyan }, 0f, 0f, 0.15f, 1f, 1f, 0f));
+
+            // A soft glow filling the net: "don't be in here".
+            var fill = Looping("Net Glow", ring.transform, Mat("M_VfxBubbleNetFill", Glow, new Color(0.25f, 0.9f, 1.1f), false, 0.5f, 0.04f), ParticleSystemRenderMode.HorizontalBillboard);
+            var fm = fill.main; fm.simulationSpace = ParticleSystemSimulationSpace.Local; fm.startLifetime = 0.9f; fm.startSpeed = 0f;
+            fm.startSize = radius * 2.6f; fm.maxParticles = 4;
+            var fe = fill.emission; fe.rateOverTime = 3f;
+            ColorLife(fill, Grad(new[] { White, White }, 0f, 0f, 0.4f, 0.8f, 1f, 0f));
+            return ring;
+        }
+
+        // A turtle about to come up for air: a small boil of bubbles.
+        public static ParticleSystem BreathBubbles(Transform parent)
+        {
+            Ensure();
+            var b = Looping("Breath Bubbles", parent, Mat("M_VfxBubble", Sparkle, new Color(1.2f, 2.4f, 2.6f), false, 2f, 0.2f));
+            var m = b.main; m.simulationSpace = ParticleSystemSimulationSpace.Local; m.startLifetime = R(0.5f, 1f);
+            m.startSpeed = R(0.3f, 0.9f); m.startSize = R(0.15f, 0.35f); m.maxParticles = 120;
+            var e = b.emission; e.rateOverTime = 40f;
+            Shape(b, ParticleSystemShapeType.Cone, 0.7f, 10f, new Vector3(-90f, 0f, 0f));
+            SizeLife(b, Curve(0f, 0.3f, 0.3f, 1f, 1f, 0.2f));
+            ColorLife(b, Grad(new[] { White, Cyan }, 0f, 0f, 0.15f, 1f, 1f, 0f));
+            return b;
+        }
+
+        // Glowing streaks low over the sea that rush past at the tide's speed:
+        // the main thing that makes the speed visible. SpeedFx sets their speed.
+        public static ParticleSystem WaterStreaks(Transform parent)
+        {
+            Ensure();
+            var ps = Looping("Water Streaks", parent, Mat("M_VfxWaterStreak", Streak, new Color(0.7f, 1.8f, 2.2f), false, 1.2f, 0.25f, 1.5f), ParticleSystemRenderMode.Stretch);
+            var m = ps.main; m.startLifetime = R(2.4f, 3.6f); m.startSpeed = 0f; m.startSize = R(0.08f, 0.16f);
+            m.maxParticles = 600; m.playOnAwake = true;
+            m.startColor = new ParticleSystem.MinMaxGradient(new Color(0.7f, 1f, 1f), new Color(1f, 0.9f, 1f));
+            var e = ps.emission; e.rateOverTime = 30f;
+            Shape(ps, ParticleSystemShapeType.Box, 1f);
+            var sh = ps.shape; sh.scale = new Vector3(70f, 0.6f, 70f);
+            Vel(ps, Vector2.zero, Vector2.zero, new Vector2(-10f, -9f));
+            ColorLife(ps, Grad(new[] { White, White }, 0f, 0f, 0.15f, 0.8f, 0.8f, 0.6f, 1f, 0f));
+            var r = ps.GetComponent<ParticleSystemRenderer>();
+            r.velocityScale = 0.16f; r.lengthScale = 2f;
+            ps.transform.localPosition = new Vector3(0f, 0.35f, 55f);
+            return ps;
+        }
+
+        // Spray thrown up from the boat's bow.
+        public static ParticleSystem BowSpray(Transform parent)
+        {
+            Ensure();
+            var ps = Looping("Bow Spray", parent, Mat("M_VfxBowSpray", Droplet, new Color(0.85f, 0.95f, 1f, 0.75f), true, 0f, 0.2f, 0.6f));
+            var m = ps.main; m.startLifetime = R(0.35f, 0.7f); m.startSpeed = R(2.5f, 4.5f); m.startSize = R(0.05f, 0.14f);
+            m.gravityModifier = 1.4f; m.maxParticles = 400; m.playOnAwake = true;
+            var e = ps.emission; e.rateOverTime = 10f;
+            Shape(ps, ParticleSystemShapeType.Cone, 0.35f, 35f, new Vector3(-55f, 0f, 0f));
+            Vel(ps, Vector2.zero, Vector2.zero, new Vector2(-8f, -6f));
+            SizeLife(ps, Curve(0f, 1f, 1f, 0.4f));
+            ColorLife(ps, Grad(new[] { White, Cyan }, 0f, 1f, 0.7f, 0.8f, 1f, 0f));
+            ps.transform.localPosition = new Vector3(0f, 0.15f, 1.3f);
+            return ps;
+        }
+
+        // Faint speed lines rushing past the screen edges (camera space).
+        public static ParticleSystem AirLines(Transform parent)
+        {
+            Ensure();
+            var ps = Looping("Air Lines", parent, Mat("M_VfxAirLine", Streak, new Color(0.8f, 1.2f, 1.6f), false, 0.6f, 0.01f, 0.5f), ParticleSystemRenderMode.Stretch);
+            var m = ps.main; m.simulationSpace = ParticleSystemSimulationSpace.Local; m.startLifetime = R(0.3f, 0.5f);
+            m.startSpeed = R(32f, 48f); m.startSize = R(0.025f, 0.05f); m.maxParticles = 200; m.playOnAwake = true;
+            var e = ps.emission; e.rateOverTime = 0f;
+            // A cone pointing back at the camera, emitting from its rim: lines fly
+            // outward past the edges of the view, like the classic warp effect.
+            Shape(ps, ParticleSystemShapeType.Cone, 5.5f, 24f, new Vector3(0f, 180f, 0f));
+            var sh = ps.shape; sh.radiusThickness = 0f;
+            ColorLife(ps, Grad(new[] { White, White }, 0f, 0f, 0.2f, 0.7f, 1f, 0f));
+            var r = ps.GetComponent<ParticleSystemRenderer>();
+            r.velocityScale = 0.05f; r.lengthScale = 2f;
+            ps.transform.localPosition = new Vector3(0f, 0f, 16f);
+            return ps;
+        }
+
+        // ==================================================================
         // RESTYLING LOOPING / AMBIENT SYSTEMS (built by other steps)
         // ==================================================================
 

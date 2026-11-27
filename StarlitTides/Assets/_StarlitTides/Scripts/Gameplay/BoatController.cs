@@ -54,12 +54,15 @@ namespace StarlitTides
         public Transform visual;             // the model that tilts and leans
 
         public Vector3 Velocity { get { return velocity; } }
+        /// <summary>A shove from outside (an orca's wave), fading out over ~0.5 s.</summary>
+        public Vector3 ExternalVelocity { get { return externalVelocity; } }
         public bool IsDashing { get { return Time.time < dashEndTime; } }
         public bool IsInvulnerable { get { return Time.time < invulnerableUntil; } }
         // 0 right after a dash, 1 when the dash is ready again.
         public float DashCooldown01 { get { return Mathf.Clamp01((Time.time - lastDashTime) / dashCooldown); } }
 
         Vector3 velocity;
+        Vector3 externalVelocity;
         Vector3 dashDirection;
         float dashEndTime = -10f;
         float lastDashTime = -10f;
@@ -119,11 +122,21 @@ namespace StarlitTides
             if (OnDash != null) OnDash();
         }
 
+        /// <summary>Shoves the boat (Phase 9: the orcas' wave-wash). The push fades out by itself.</summary>
+        public void Push(Vector3 push)
+        {
+            push.y = 0f;
+            externalVelocity += push;
+        }
+
         void Steer(Vector2 input)
         {
             float dt = Time.deltaTime;
 
-            Vector3 targetVelocity = new Vector3(input.x * lateralSpeed, 0f, input.y * forwardSpeed);
+            // Faster tides (later zones) get a little more steering, so the game stays fair.
+            float tide = OceanController.Instance != null ? OceanController.Instance.tideSpeed : 8f;
+            float steerBoost = 1f + Mathf.Clamp01((tide - 8f) / 14f) * 0.3f;
+            Vector3 targetVelocity = new Vector3(input.x * lateralSpeed * steerBoost, 0f, input.y * forwardSpeed);
             float response = acceleration;
             if (IsDashing)
             {
@@ -139,7 +152,8 @@ namespace StarlitTides
             Vector2 laneZ = PlayArea.LaneZ;
             float sideSpeed = velocity.x;
 
-            Vector3 position = transform.position + velocity * dt;
+            Vector3 position = transform.position + (velocity + externalVelocity) * dt;
+            externalVelocity *= Mathf.Exp(-2f * dt);
             position.x = SoftClamp(position.x, -halfWidth, halfWidth, ref velocity.x);
             position.z = SoftClamp(position.z, laneZ.x, laneZ.y, ref velocity.z);
             transform.position = position;

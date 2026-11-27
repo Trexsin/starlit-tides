@@ -23,6 +23,9 @@ namespace StarlitTides
         public static event Action OnBreach;
         public static event Action OnSplashDown;
 
+        [Tooltip("Off when the EncounterDirector decides when the whale comes (Phase 9).")]
+        public bool autoSchedule = true;
+
         [Header("References")]
         public Transform whale;
         public GameObject waveSegmentPrefab;
@@ -79,6 +82,8 @@ namespace StarlitTides
         {
             GameManager game = GameManager.Instance;
             if (game == null || !game.IsPlaying || IsActive) return;
+            // Phase 9: the EncounterDirector calls the whale in Storm Reach / Aurora Deep.
+            if (!autoSchedule) return;
             if (game.RunTime >= nextWhaleTime)
             {
                 nextWhaleTime = game.RunTime + UnityEngine.Random.Range(interval.x, interval.y);

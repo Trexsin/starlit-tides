@@ -5,6 +5,9 @@
 //   Sine   - weaves left and right
 //   Circle - swims in small loops
 //   Dart   - picks a new spot every pulse and glides to it
+//   Drift  - (Phase 9) drifts with the current like real jellyfish do: a weak
+//            pulse forward, carried sideways by the water. A bloom is many
+//            jellies sharing one current, so the whole field slides together.
 // It also makes its light and water glow pulse along with the bell.
 
 using UnityEngine;
@@ -13,7 +16,7 @@ namespace StarlitTides
 {
     public class Jellyfish : Obstacle
     {
-        public enum SwimPattern { Sine, Circle, Dart }
+        public enum SwimPattern { Sine, Circle, Dart, Drift }
 
         [Header("Jellyfish")]
         public float pulseSpeed = 2.4f;   // keep the same as the material's Pulse Speed
@@ -44,6 +47,14 @@ namespace StarlitTides
             extraDrift = Vector3.zero;
         }
 
+        /// <summary>Drift with a sea current (m/s), as part of a bloom.</summary>
+        public void BeginDrift(Vector3 current)
+        {
+            pattern = SwimPattern.Drift;
+            current.y = 0f;
+            extraDrift = current;
+        }
+
         protected override void Tick(float dt)
         {
             base.Tick(dt);
@@ -61,6 +72,12 @@ namespace StarlitTides
                 position.x = startX + Mathf.Cos(angle) * swimWidth * 0.6f;
                 position.z += Mathf.Sin(angle) * swimWidth * 0.6f * dt * 3f;
             }
+            else if (pattern == SwimPattern.Drift)
+            {
+                // Each bell pulse gives a little push "up-current" (they swim against it).
+                float pulsePush = Mathf.Max(0f, Mathf.Sin(age * pulseSpeed + Seed));
+                position.z += pulsePush * 0.25f * dt;
+            }
             else // Dart
             {
                 if (age >= nextDartTime)
@@ -71,7 +88,8 @@ namespace StarlitTides
                 position.x = Mathf.MoveTowards(position.x, dartTargetX, dt * 3f);
             }
 
-            position.x = Mathf.Clamp(position.x, -14.5f, 14.5f);
+            if (pattern != SwimPattern.Drift)
+                position.x = Mathf.Clamp(position.x, -PlayArea.ObstacleHalfWidth, PlayArea.ObstacleHalfWidth);
             transform.position = position;
 
             // Pulse the light and water glow (0..1, same timing as the shader).

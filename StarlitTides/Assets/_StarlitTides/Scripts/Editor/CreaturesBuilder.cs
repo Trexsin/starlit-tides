@@ -3,10 +3,15 @@
 // Menu: Starlit Tides > 10. Build Sea Creatures   (run 5. Build Gameplay first)
 //       Starlit Tides > Rebuild Everything         (steps 4-8, 10 and 11 in one go)
 //
-// Three creatures, all procedural meshes built here (no imported models):
-//   Manta ray   - a lofted wing surface (top + belly), cephalic fins, whip tail
-//   Sea turtle  - domed shell with glowing scute seams, head, four flippers
-//   Dolphin     - a lofted body with dorsal fin, pectoral fins and flukes
+// All procedural meshes built here (no imported models), at REAL-LIFE size
+// (Phase 9; the paper boat is ~3 m):
+//   Manta ray   - 5.5 m wingspan (giant oceanic mantas: ~4.5-7 m)
+//   Sea turtle  - 1.9 m leatherback, swims under water and surfaces to breathe
+//   Dolphin     - 3 m bottlenose (2-3.9 m), porpoising pods and bow-riders
+//   Orca        - 7.5 m male (6-8 m) with its tall dorsal fin, 6 m females
+//   Humpback    - 14 m (12-16 m): bubble-net lunges, and the far-off breacher
+// (The narwhal and nautilus are still built but no longer spawn: an Arctic
+//  whale and a deep-sea mollusc don't belong in this sea.)
 // Every vertex gets animation masks in its colour (see StarlitSeaCreature.shader):
 //   R = fin weight, G = body wave, B = glow mask, A = fin phase.
 
@@ -41,7 +46,7 @@ namespace StarlitTides.EditorTools
         public static void RebuildEverything()
         {
             if (!Application.isBatchMode && !EditorUtility.DisplayDialog("Rebuild Starlit Tides",
-                    "Rebuilds the environment, gameplay, features, bonus features, UI, sea creatures and the sea field (steps 4-8, 10 and 11).\n\nThis takes a minute or two.",
+                    "Rebuilds the environment, gameplay, features, bonus features, UI, sea creatures, the sea field and the voyage (steps 4-8, 10, 11 and 12).\n\nThis takes a minute or two.",
                     "Rebuild", "Cancel"))
                 return;
             if (!UIBuilder.EnsureTextMeshPro()) return;
@@ -52,6 +57,7 @@ namespace StarlitTides.EditorTools
             UIBuilder.Build();
             Build();
             SeaFieldBuilder.Build();   // Phase 8: scenery beyond the lane + horizon islands
+            Phase9Builder.Build();     // Phase 9: the voyage, encounters, speed effects
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene());
             AssetDatabase.SaveAssets();
             EditorAssetUtil.CheckGeneratedAssets();   // catches materials saved without their textures
@@ -66,15 +72,24 @@ namespace StarlitTides.EditorTools
             GameObject manta = SavePrefab(BuildManta(), PrefabDir + "/MantaRay.prefab");
             GameObject turtle = SavePrefab(BuildTurtle(), PrefabDir + "/SeaTurtle.prefab");
             GameObject dolphin = SavePrefab(BuildDolphin(), PrefabDir + "/Dolphin.prefab");
-            GameObject orca = SavePrefab(BuildOrca(), PrefabDir + "/Orca.prefab");
+            GameObject orca = SavePrefab(BuildOrca(false), PrefabDir + "/Orca.prefab");
+            GameObject orcaFemale = SavePrefab(BuildOrca(true), PrefabDir + "/OrcaFemale.prefab");
             GameObject narwhal = SavePrefab(BuildNarwhal(), PrefabDir + "/Narwhal.prefab");
             GameObject nautilus = SavePrefab(BuildNautilus(), PrefabDir + "/Nautilus.prefab");
 
             ObstacleSpawner spawner = Object.FindAnyObjectByType<ObstacleSpawner>();
             if (spawner != null)
             {
-                spawner.creaturePrefabs = new[] { manta, turtle, dolphin, orca, narwhal, nautilus };
+                // (Only used without a VoyageDirector: the voyage plans creatures itself.)
+                spawner.creaturePrefabs = new[] { manta, turtle, dolphin };
                 EditorUtility.SetDirty(spawner);
+            }
+            EncounterDirector encounters = Object.FindAnyObjectByType<EncounterDirector>();
+            if (encounters != null)
+            {
+                encounters.turtle = turtle; encounters.dolphin = dolphin; encounters.manta = manta;
+                encounters.orcaMale = orca; encounters.orcaFemale = orcaFemale;
+                EditorUtility.SetDirty(encounters);
             }
 
             // Scenery: a humpback whale that breaches far out at sea now and then.
@@ -86,9 +101,13 @@ namespace StarlitTides.EditorTools
             breacher.whale = BuildHumpback(ambient.transform).transform;
             breacher.splashVfx = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_StarlitTides/Prefabs/VFX/VFX_WhaleSplash.prefab");
 
+            // The bubble-net humpback reuses the breacher's mesh and material (built just above).
+            GameObject humpback = SavePrefab(BuildHumpbackLunger(), PrefabDir + "/Humpback.prefab");
+            if (encounters != null) { encounters.humpback = humpback; EditorUtility.SetDirty(encounters); }
+
             AssetDatabase.SaveAssets();
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
-            Debug.Log("[Starlit Tides] Sea creatures built: manta ray, sea turtle, dolphin, orca, narwhal, nautilus + a breaching humpback.");
+            Debug.Log("[Starlit Tides] Sea creatures built (life-size): manta ray, sea turtle, dolphin, orcas, humpback (+ narwhal, nautilus, a breaching humpback).");
         }
 
         // ==============================================================
@@ -308,14 +327,14 @@ namespace StarlitTides.EditorTools
         // scale (the paper boat is ~3 m): a 7 m manta, 4 m dolphins, a 7 m orca...
         static SeaCreature Setup(GameObject root, Transform visual, Collider col, SeaCreature.Behaviour behaviour,
                                  float radius, float damage, float floatOffset, Vector2 crossSpeed,
-                                 Color lightColor, float lightIntensity, float lightRange, float glowRadius)
+                                 Color lightColor, float lightIntensity, float lightRange, float glowRadius, float bodyLength = 3f)
         {
             col.isTrigger = true;
             var c = root.AddComponent<SeaCreature>();
             c.type = ObstacleType.SeaCreature; c.behaviour = behaviour;
             c.radius = radius; c.lightDamage = damage; c.visual = visual; c.hitCollider = col;
             c.floatOffset = floatOffset; c.bobAmplitude = 0.05f; c.bobSpeed = 1.4f; c.followWaves = 0.8f;
-            c.crossSpeed = crossSpeed; c.leapChance = 0f;
+            c.crossSpeed = crossSpeed; c.leapChance = 0f; c.bodyLength = bodyLength;
             c.glowLight = AddLight(root.transform, new Vector3(0f, 1f, 0f), lightColor, lightIntensity, lightRange);
             var d = root.AddComponent<WaterDisturber>();
             d.radius = glowRadius; d.strength = 0.9f; d.maxHeightAboveWater = 2.5f;
@@ -349,14 +368,14 @@ namespace StarlitTides.EditorTools
             mat.SetVector("_SwimAxis", new Vector4(1f, 0f, 0f, 0f));
             Stylize(mat, 0.3f);
 
-            const float scale = 1.75f;   // an 8 m wingspan: the top end of a giant oceanic manta
+            const float scale = 1.2f;    // a 5.5 m wingspan: a typical giant oceanic manta (4.5-7 m)
             GameObject root = Creature("MantaRay", MantaMesh(), mat, scale, out Transform visual);
             var col = root.AddComponent<BoxCollider>();
             col.size = new Vector3(3.8f, 0.9f, 2.0f) * scale; col.center = new Vector3(0f, 0.15f, 0f);
-            var c = Setup(root, visual, col, SeaCreature.Behaviour.MantaGlide, 3.4f, 0.25f, 0.04f, new Vector2(0.4f, 2.6f),
-                new Color(0.9f, 0.45f, 1f), 2.8f, 10f, 4.4f);
-            c.weave = 1.6f; c.weaveFrequency = 0.18f;
-            c.leapChance = 0.45f; c.leapHeight = 4.2f; c.leapDuration = 1.8f; c.safeHeight = 1.8f;
+            var c = Setup(root, visual, col, SeaCreature.Behaviour.MantaGlide, 2.6f, 0.15f, 0.04f, new Vector2(0.6f, 2.2f),
+                new Color(0.9f, 0.45f, 1f), 2.6f, 9f, 3.4f, 2.8f);
+            c.weave = 1.4f; c.weaveFrequency = 0.18f;
+            c.leapChance = 0.45f; c.leapHeight = 3.2f; c.leapDuration = 1.6f; c.safeHeight = 1.5f;
             return root;
         }
 
@@ -409,13 +428,14 @@ namespace StarlitTides.EditorTools
             mat.SetFloat("_SwimAmount", 0.04f);
             Stylize(mat, 0.45f);
 
-            const float scale = 1.3f;   // a 2.8 m leatherback-sized turtle
+            const float scale = 0.75f;   // a 1.9 m leatherback (1.6-2.2 m)
             GameObject root = Creature("SeaTurtle", TurtleMesh(), mat, scale, out Transform visual);
             var col = root.AddComponent<SphereCollider>();
             col.radius = 1.05f * scale; col.center = new Vector3(0f, 0.1f, 0f);
-            var c = Setup(root, visual, col, SeaCreature.Behaviour.TurtlePaddle, 1.7f, 0.25f, -0.24f, new Vector2(0.3f, 1.5f),
-                new Color(0.5f, 1f, 0.6f), 1.8f, 5.5f, 2.4f);
-            c.weave = 0.6f; c.weaveFrequency = 0.18f;
+            var c = Setup(root, visual, col, SeaCreature.Behaviour.TurtlePaddle, 1.1f, 0.1f, -0.14f, new Vector2(0.3f, 0.8f),
+                new Color(0.5f, 1f, 0.6f), 1.6f, 4.5f, 1.6f, 1.9f);
+            c.weave = 0.4f; c.weaveFrequency = 0.18f;
+            c.telegraph = VfxKit.BreathBubbles(root.transform);   // bubbles just before it surfaces
             return root;
         }
 
@@ -544,20 +564,23 @@ namespace StarlitTides.EditorTools
             Stylize(mat, 0.6f);
 
             var shape = new CetaceanShape { name = "Dolphin", length = 4f, radius = 0.55f, beak = 0.12f, dorsalHeight = 0.55f, dorsalZ = 0.04f, pectoralLength = 0.6f, flukeSpan = 1.1f };
-            GameObject root = Creature("Dolphin", CetaceanMesh(shape), mat, 1f, out Transform visual);
+            // Real-world scale: a 3 m bottlenose dolphin (2-3.9 m; the mesh is 4 m, x0.75).
+            const float dolphinScale = 0.75f;
+            GameObject root = Creature("Dolphin", CetaceanMesh(shape), mat, dolphinScale, out Transform visual);
             var col = root.AddComponent<CapsuleCollider>();
-            col.direction = 2; col.radius = 0.6f; col.height = 3.8f;
-            var c = Setup(root, visual, col, SeaCreature.Behaviour.DolphinLeap, 1.8f, 0.2f, -0.4f, new Vector2(0.6f, 3f),
-                new Color(0.45f, 0.75f, 1f), 1.8f, 6f, 2.2f);
+            col.direction = 2; col.radius = 0.6f * dolphinScale; col.height = 3.8f * dolphinScale;
+            var c = Setup(root, visual, col, SeaCreature.Behaviour.DolphinLeap, 1.4f, 0.15f, -0.3f, new Vector2(0.6f, 3f),
+                new Color(0.45f, 0.75f, 1f), 1.6f, 5f, 1.7f, 3f);
             c.weave = 0.4f; c.weaveFrequency = 0.3f;
-            c.leapHeight = 2.7f; c.leapDuration = 1.3f; c.safeHeight = 1.4f;
+            c.leapHeight = 2.2f; c.leapDuration = 1.1f; c.safeHeight = 1.0f;
             return root;
         }
 
-        // Orca (killer whale): 9 m bull, glossy black and white with violet glow lines
-        static GameObject BuildOrca()
+        // Orca (killer whale): 7.5 m male with a 1.8 m dorsal fin, or a 6 m female
+        // with a smaller curved fin. Glossy black and white with violet glow lines.
+        static GameObject BuildOrca(bool female)
         {
-            Material mat = CreatureMaterial("M_Orca", new Color(0.012f, 0.012f, 0.025f), new Color(0.9f, 0.92f, 0.96f),
+            Material mat = CreatureMaterial(female ? "M_OrcaFemale" : "M_Orca", new Color(0.012f, 0.012f, 0.025f), new Color(0.9f, 0.92f, 0.96f),
                 new Color(1.6f, 0.6f, 3.6f), new Color(0.6f, 0.4f, 2.2f));
             mat.SetFloat("_BellyLow", -0.12f);
             mat.SetFloat("_BellyHigh", 0.02f);       // a crisp black/white line, not a blend
@@ -571,16 +594,19 @@ namespace StarlitTides.EditorTools
             SwimMaterial(mat, 0.35f, 0.9f, 5f);
             Stylize(mat, 0.5f, 0.7f);
 
-            var shape = new CetaceanShape { name = "Orca", length = 7f, radius = 1.05f, beak = 0f, dorsalHeight = 1.7f, dorsalZ = 0.02f, pectoralLength = 1.3f, flukeSpan = 2.2f };
-            // Real-world scale: a big adult bull orca, ~9 m (the mesh is 7 m, x1.3).
-            const float orcaScale = 1.3f;
-            GameObject root = Creature("Orca", CetaceanMesh(shape), mat, orcaScale, out Transform visual);
+            // Males have a tall, straight dorsal fin (up to ~1.8 m); females a smaller, curved one.
+            var shape = new CetaceanShape { name = female ? "OrcaFemale" : "Orca", length = 7f, radius = 1.05f, beak = 0f,
+                dorsalHeight = female ? 0.95f : 1.7f, dorsalZ = 0.02f, pectoralLength = female ? 1.0f : 1.3f, flukeSpan = 2.2f };
+            // Real-world scale: male 7.5 m (6-8 m), female 6 m (5-7 m). The mesh is 7 m.
+            float orcaScale = female ? 0.86f : 1.07f;
+            GameObject root = Creature(female ? "OrcaFemale" : "Orca", CetaceanMesh(shape), mat, orcaScale, out Transform visual);
             var col = root.AddComponent<CapsuleCollider>();
             col.direction = 2; col.radius = 1.0f * orcaScale; col.height = 6.6f * orcaScale;
-            var c = Setup(root, visual, col, SeaCreature.Behaviour.DolphinLeap, 3.2f * orcaScale, 0.3f, -0.75f * orcaScale, new Vector2(0.5f, 2.6f),
-                new Color(0.7f, 0.5f, 1f), 2.6f, 11f, 3.6f * orcaScale);
+            var c = Setup(root, visual, col, SeaCreature.Behaviour.OrcaHunt, 3.2f * orcaScale, 0.35f, -0.6f * orcaScale, new Vector2(0.5f, 2.6f),
+                new Color(0.7f, 0.5f, 1f), 2.4f, 10f, 3.2f * orcaScale, 7f * orcaScale);
             c.weave = 0.3f; c.weaveFrequency = 0.2f;
-            c.leapHeight = 4.4f; c.leapDuration = 2.1f; c.safeHeight = 2.5f;
+            c.leapHeight = 1.2f; c.leapDuration = 1.2f; c.safeHeight = 2.2f;
+            c.despawnX = 48f;
             return root;
         }
 
@@ -610,7 +636,28 @@ namespace StarlitTides.EditorTools
             return root;
         }
 
-        // Humpback whale: 18 m, long pectoral fins. Scenery: it breaches out at sea.
+        static readonly CetaceanShape HumpbackShape = new CetaceanShape { name = "Humpback", length = 16f, radius = 2.1f, beak = 0f, dorsalHeight = 0.5f, dorsalZ = -0.12f, pectoralLength = 4.8f, flukeSpan = 5.2f };
+
+        // Humpback (Phase 9): the bubble-net lunge feeder. A glowing ring of bubbles
+        // warns where it will come up; then it lunges straight up through it.
+        static GameObject BuildHumpbackLunger()
+        {
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(Gen + "/M_Humpback.mat");
+            Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/Humpback.asset");
+            if (mat == null || mesh == null) throw new System.Exception("[Starlit Tides] Build the breaching humpback first (its mesh and material are shared).");
+            const float scale = 0.875f;   // 14 m
+            GameObject root = Creature("Humpback", mesh, mat, scale, out Transform visual);
+            var col = root.AddComponent<CapsuleCollider>();
+            col.direction = 2; col.radius = 2.4f; col.height = 13f;
+            var c = Setup(root, visual, col, SeaCreature.Behaviour.HumpbackLunge, 5f, 0.4f, 0f, new Vector2(0f, 0f),
+                new Color(0.4f, 0.85f, 1f), 3.2f, 18f, 5f, 14f);
+            c.followWaves = 0.3f; c.bobAmplitude = 0f;
+            c.telegraph = VfxKit.BubbleRing(root.transform, 4.2f);
+            c.despawnX = 60f;
+            return root;
+        }
+
+        // Humpback whale, 14 m, long pectoral fins. Scenery: it breaches out at sea.
         static GameObject BuildHumpback(Transform parent)
         {
             Material mat = CreatureMaterial("M_Humpback", new Color(0.05f, 0.07f, 0.14f), new Color(0.82f, 0.85f, 0.9f),
@@ -625,9 +672,8 @@ namespace StarlitTides.EditorTools
             mat.SetFloat("_FinSpeed", 1.2f);
             Stylize(mat, 0.4f);
 
-            var shape = new CetaceanShape { name = "Humpback", length = 16f, radius = 2.1f, beak = 0f, dorsalHeight = 0.5f, dorsalZ = -0.12f, pectoralLength = 4.8f, flukeSpan = 5.2f };
-            // Real-world scale: a big adult humpback, ~18 m (the mesh is 16 m, x1.125).
-            GameObject whale = Creature("Humpback Whale", CetaceanMesh(shape), mat, 1.125f, out Transform visual);
+            // Real-world scale: an adult humpback, 14 m (12-16 m; the mesh is 16 m, x0.875).
+            GameObject whale = Creature("Humpback Whale", CetaceanMesh(HumpbackShape), mat, 0.875f, out Transform visual);
             whale.transform.SetParent(parent, false);
             AddLight(whale.transform, new Vector3(0f, 2f, 0f), new Color(0.4f, 0.8f, 1f), 3f, 26f);
             var d = whale.AddComponent<WaterDisturber>();

@@ -323,6 +323,81 @@ namespace StarlitTides.EditorTools
             return button;
         }
 
+        // A dropdown in the menu style: dark glass, gold caption, a scrolling list
+        // of big readable rows (TMP's default is sized for 14 pt text).
+        static TMP_Dropdown MakeDropdown(string name, Transform parent, Vector2 anchor, Vector2 position, Vector2 size)
+        {
+            TMP_DefaultControls.Resources res = new TMP_DefaultControls.Resources();
+            res.standard = rounded;
+            res.background = uiResources.background;
+            res.inputField = uiResources.inputField;
+            res.knob = uiResources.knob;
+            res.checkmark = uiResources.checkmark;
+            res.dropdown = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/DropdownArrow.psd");
+            res.mask = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UIMask.psd");
+            GameObject go = TMP_DefaultControls.CreateDropdown(res);
+            go.name = name + " Dropdown";
+            go.transform.SetParent(parent, false);
+            RectTransform rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = anchor;
+            rt.anchoredPosition = position;
+            rt.sizeDelta = size;
+
+            TMP_Dropdown dd = go.GetComponent<TMP_Dropdown>();
+            Image bg = go.GetComponent<Image>();
+            bg.sprite = rounded;
+            bg.type = Image.Type.Sliced;
+            ColorBlock colors = dd.colors;
+            colors.normalColor = new Color(0.04f, 0.09f, 0.18f, 0.85f);
+            colors.highlightedColor = new Color(0.24f, 0.18f, 0.07f, 0.92f);
+            colors.selectedColor = new Color(0.24f, 0.18f, 0.07f, 0.92f);
+            colors.pressedColor = new Color(0.38f, 0.28f, 0.1f, 0.95f);
+            colors.disabledColor = new Color(0.04f, 0.09f, 0.18f, 0.4f);
+            dd.colors = colors;
+            Outline edge = go.AddComponent<Outline>();
+            edge.effectColor = new Color(0.55f, 0.92f, 1f, 0.35f);
+            edge.effectDistance = new Vector2(1.5f, -1.5f);
+
+            TextMeshProUGUI caption = (TextMeshProUGUI)dd.captionText;
+            caption.font = titleFont; caption.fontSize = 24; caption.color = Gold;
+            caption.alignment = TextAlignmentOptions.Center;
+            caption.textWrappingMode = TextWrappingModes.NoWrap;
+            RectTransform arrow = (RectTransform)go.transform.Find("Arrow");
+            if (arrow != null) { arrow.sizeDelta = new Vector2(28, 28); arrow.GetComponent<Image>().color = Gold; }
+
+            // The pop-up list: taller rows, readable text, dark glass.
+            RectTransform template = dd.template;
+            template.sizeDelta = new Vector2(0, 330);
+            template.GetComponent<Image>().color = new Color(0.03f, 0.07f, 0.15f, 0.97f);
+            Transform item = template.Find("Viewport/Content/Item");
+            RectTransform content = (RectTransform)template.Find("Viewport/Content");
+            content.sizeDelta = new Vector2(0, 50);
+            ((RectTransform)item).sizeDelta = new Vector2(0, 50);
+            Image itemBg = item.Find("Item Background").GetComponent<Image>();
+            itemBg.color = new Color(1f, 1f, 1f, 1f);
+            Toggle itemToggle = item.GetComponent<Toggle>();
+            ColorBlock itemColors = itemToggle.colors;
+            itemColors.normalColor = new Color(0.04f, 0.09f, 0.18f, 0f);
+            itemColors.highlightedColor = new Color(0.3f, 0.22f, 0.08f, 0.95f);
+            itemColors.selectedColor = new Color(0.3f, 0.22f, 0.08f, 0.95f);
+            itemColors.pressedColor = new Color(0.4f, 0.3f, 0.1f, 1f);
+            itemToggle.colors = itemColors;
+            TextMeshProUGUI itemLabel = (TextMeshProUGUI)dd.itemText;
+            itemLabel.font = bodyFont; itemLabel.fontSize = 24; itemLabel.color = TextColor;
+            itemLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            Image check = item.Find("Item Checkmark").GetComponent<Image>();
+            check.color = Gold;
+            ((RectTransform)check.transform).sizeDelta = new Vector2(26, 26);
+            Scrollbar bar = template.GetComponentInChildren<Scrollbar>(true);
+            if (bar != null) { ((RectTransform)bar.transform).sizeDelta = new Vector2(14, 0); bar.GetComponent<Image>().color = new Color(0.1f, 0.2f, 0.32f, 0.8f); }
+
+            dd.ClearOptions();
+            dd.AddOptions(new System.Collections.Generic.List<string> { "Native" });
+            ButtonFeedback feedback = go.AddComponent<ButtonFeedback>();
+            feedback.normalColor = Gold;   // (it tints the caption)
+            return dd;
+        }
+
         static Slider MakeSlider(string label, Transform parent, float y)
         {
             Label(label + " Label", parent, label, bodyFont, 30, TextColor, TextAlignmentOptions.Left, new Vector2(0.5f, 0.5f), new Vector2(-220, y), new Vector2(300, 50));
@@ -468,6 +543,12 @@ namespace StarlitTides.EditorTools
             // Pop-ups, info line and FPS.
             hud.popupText = Label("Popup", canvas, "", titleFont, 50, TextColor, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), new Vector2(0, 220), new Vector2(1400, 80));
             hud.popupText.fontSharedMaterial = titleGlow;
+            // Phase 9: the voyage zone banner ("ZONE 3 / SUNSET CHANNEL").
+            hud.zoneTitle = Label("Zone Title", canvas, "", titleFont, 44, Gold, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), new Vector2(0, 385), new Vector2(1600, 150));
+            hud.zoneTitle.fontSharedMaterial = titleGlow;
+            hud.zoneTitle.alpha = 0f;
+            hud.zoneSubtitle = Label("Zone Subtitle", canvas, "", bodyFont, 30, TextColor, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), new Vector2(0, 292), new Vector2(1400, 50));
+            hud.zoneSubtitle.alpha = 0f;
             Image infoBack = Picture("Info Backing", canvas, rounded, new Color(0.02f, 0.04f, 0.1f, 0.55f), new Vector2(0.5f, 0f), new Vector2(0, 30), new Vector2(560, 40));
             infoBack.type = Image.Type.Sliced;
             hud.infoText = Label("Info", canvas, "", bodyFont, 22, TextColor, TextAlignmentOptions.Center, new Vector2(0.5f, 0f), new Vector2(0, 30), new Vector2(1200, 34));
@@ -521,16 +602,17 @@ namespace StarlitTides.EditorTools
                 "Esc / Start    pause\n" +
                 "P / Select    photo mode\n\n" +
                 "<color=#FFD27A>THE GOAL</color>\n" +
-                "Your paper boat's light slowly fades. Collect the glowing plankton orbs to keep it alive, and dodge rocks, drifting logs and jellyfish. When the light runs out, the tide goes dark.",
+                "Your paper boat's light slowly fades. Collect the glowing plankton orbs to keep it alive. Sail out through six zones, from Lantern Bay to the Aurora Deep: each one is faster, and has its own sea life. When the light runs out, the tide goes dark.",
                 bodyFont, 28, TextColor, TextAlignmentOptions.TopLeft, c, new Vector2(-300, -10), new Vector2(560, 560));
 
             Label("Features", t,
-                "<color=#FFD27A>TIPS</color>\n" +
-                "• Grab orbs in quick succession for a <color=#FFD27A>combo</color>: up to x6 score\n" +
-                "• Slip past obstacles closely for a <color=#7FE8FF>near miss</color> bonus\n" +
-                "• Catch the reflection of a <color=#FFD27A>golden shooting star</color> for Starburst: x2 points\n" +
-                "• The lighthouse beam reveals <color=#7FE8FF>hidden orbs</color>\n" +
-                "• Storms, auroras and a <color=#7FE8FF>giant glowing whale</color> appear as you sail on. Find the gap in its waves!",
+                "<color=#FFD27A>READ THE SEA</color>\n" +
+                "• <color=#7FE8FF>Jellyfish blooms</color> drift with the current: follow the gap\n" +
+                "• <color=#7FE8FF>Turtles</color> only block you when they surface to breathe\n" +
+                "• <color=#7FE8FF>Dolphins</color> are harmless mid-leap, solid between leaps\n" +
+                "• <color=#7FE8FF>Orcas</color>: fins along the edge, then the pod charges across\n" +
+                "• A <color=#7FE8FF>ring of bubbles</color>? A humpback is about to lunge up: get out!\n" +
+                "• Orb <color=#FFD27A>combos</color>, near misses and the <color=#FFD27A>golden star</color> score big",
                 bodyFont, 28, TextColor, TextAlignmentOptions.TopLeft, c, new Vector2(320, -10), new Vector2(600, 560));
 
             ui.howToPlayFirst = MakeButton("BACK", t, c, new Vector2(0, -350), new Vector2(320, 64), ui.BackToMenu);
@@ -560,10 +642,7 @@ namespace StarlitTides.EditorTools
             // Resolution: the size the 3D world is rendered at (DisplayManager). The
             // screen itself always runs at its native size, so the UI stays sharp.
             Label("Resolution Label", t, "Resolution", bodyFont, 30, TextColor, TextAlignmentOptions.Left, c, new Vector2(-220, 12), new Vector2(300, 50));
-            view.resolutionLeft = MakeButton("<", t, c, new Vector2(0, 12), new Vector2(60, 50), null, 30);
-            view.resolutionText = Label("Resolution", t, "1920 x 1080", titleFont, 26, Gold, TextAlignmentOptions.Center, c, new Vector2(150, 12), new Vector2(230, 50));
-            view.resolutionText.textWrappingMode = TextWrappingModes.NoWrap;
-            view.resolutionRight = MakeButton(">", t, c, new Vector2(300, 12), new Vector2(60, 50), null, 30);
+            view.resolutionDropdown = MakeDropdown("Resolution", t, c, new Vector2(150, 12), new Vector2(360, 52));
             view.resolutionDetail = Label("Resolution Detail", t, "", bodyFont, 20, Muted, TextAlignmentOptions.Center, c, new Vector2(0, -32), new Vector2(860, 32));
 
             view.fullscreenToggle = MakeToggle("Fullscreen", t, -85);

@@ -39,8 +39,11 @@ namespace StarlitTides
         {
             GameManager game = GameManager.Instance;
             if (game == null || !game.IsPlaying) return;
+            // Phase 9: only while the lighthouse is in sight (Lantern Bay).
+            VoyageDirector voyage = VoyageDirector.Instance;
+            bool allowed = voyage == null || voyage.Current.hiddenOrbs;
 
-            timer -= Time.deltaTime;
+            if (allowed) timer -= Time.deltaTime;
             if (timer <= 0f)
             {
                 timer = Random.Range(spawnInterval.x, spawnInterval.y);

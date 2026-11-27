@@ -55,8 +55,8 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.6
-  m_Height: 3.8
+  m_Radius: 0.45000002
+  m_Height: 2.85
   m_Direction: 2
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &9150183691535809253
@@ -71,7 +71,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef0bb4c1df9aa41bba793e0ab6323b4c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.SeaCreature
-  floatOffset: -0.4
+  floatOffset: -0.3
   bobAmplitude: 0.05
   bobSpeed: 1.4
   extraDrift: {x: 0, y: 0, z: 0}
@@ -79,8 +79,8 @@ MonoBehaviour:
   despawnX: 45
   followWaves: 0.8
   type: 3
-  lightDamage: 0.2
-  radius: 1.8
+  lightDamage: 0.15
+  radius: 1.4
   visual: {fileID: 6146961411861434699}
   rollSpeed: 0
   spinSpeed: 0
@@ -90,11 +90,13 @@ MonoBehaviour:
   weave: 0.4
   weaveFrequency: 0.3
   leapChance: 0
-  leapHeight: 2.7
-  leapDuration: 1.3
-  safeHeight: 1.4
+  leapHeight: 2.2
+  leapDuration: 1.1
+  safeHeight: 1
+  bodyLength: 3
   glowLight: {fileID: 6969587451806681405}
   hitCollider: {fileID: 185014958256526144}
+  telegraph: {fileID: 0}
 --- !u!114 &8933210085978355346
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -107,7 +109,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 75572a10d395c4e298c0ddf799fbe491, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.WaterDisturber
-  radius: 2.2
+  radius: 1.7
   strength: 0.9
   pulse: 0
   pulseSpeed: 2
@@ -145,7 +147,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.75, y: 0.75, z: 0.75}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 7242745279115256103}
@@ -284,8 +286,8 @@ Light:
   serializedVersion: 13
   m_Type: 2
   m_Color: {r: 0.45, g: 0.75, b: 1, a: 1}
-  m_Intensity: 1.8
-  m_Range: 6
+  m_Intensity: 1.6
+  m_Range: 5
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.802082
   m_CookieSize2D: {x: 0.5, y: 0.5}
