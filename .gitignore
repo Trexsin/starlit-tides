@@ -18,7 +18,10 @@ node_modules/
 [Tt]emp/
 [Oo]bj/
 [Bb]uild/
-[Bb]uilds/
+# The playable Mac and Windows builds in StarlitTides/Builds ARE kept in the repo
+# (only Unity's debug-symbol folders, which must not be shipped, stay out).
+*_BackUpThisFolder_ButDontShipItWithYourGame/
+*_BurstDebugInformation_DoNotShip/
 [Ll]ogs/
 [Uu]ser[Ss]ettings/
 *.csproj

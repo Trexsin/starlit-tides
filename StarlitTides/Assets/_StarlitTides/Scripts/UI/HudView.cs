@@ -195,7 +195,8 @@ namespace StarlitTides
             fpsText.enabled = showFps;
             if (showFps)
             {
-                float current = 1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
+                float realDt = FramePacer.Instance != null ? FramePacer.RealDeltaTime : Time.unscaledDeltaTime;
+                float current = 1f / Mathf.Max(realDt, 0.0001f);
                 fps = Mathf.Lerp(fps, current, 0.05f);
                 fpsText.text = Mathf.RoundToInt(fps) + " FPS";
             }

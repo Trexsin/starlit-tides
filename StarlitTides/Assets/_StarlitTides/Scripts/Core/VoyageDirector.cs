@@ -94,7 +94,9 @@ namespace StarlitTides
         public float loopTideBonus = 2f;
         public float maxTide = 24f;
         [Tooltip("Seconds the look takes to blend into the next zone.")]
-        public float lookBlendTime = 7f;
+        public float lookBlendTime = 14f;
+        [Tooltip("Seconds before the zone border that the sky, sea and weather start turning into the next zone's, so you sail INTO it.")]
+        public float transitionLead = 6f;
 
         [Header("Coast departure")]
         [Tooltip("Land objects (children of the environment root) that fall behind after the first zone.")]
@@ -227,6 +229,9 @@ namespace StarlitTides
             if (playing)
             {
                 ZoneTime += Time.deltaTime;
+                // Start turning the look toward the next zone a little before the border.
+                Zone upcoming = zones[NextIndex()];
+                if (ZoneTime >= Current.duration - transitionLead && lookTo != upcoming) BeginLook(upcoming);
                 if (ZoneTime >= Current.duration) NextZone();
             }
 
@@ -234,15 +239,29 @@ namespace StarlitTides
             UpdateCoast(playing);
         }
 
+        int NextIndex()
+        {
+            int next = ZoneIndex + 1;
+            return next >= zones.Length ? Mathf.Clamp(loopToZone, 0, zones.Length - 1) : next;
+        }
+
+        // Starts a smooth blend from whatever is on screen now to a zone's look.
+        void BeginLook(Zone target)
+        {
+            lookFrom = BlendSnapshot();
+            lookTo = target;
+            lookT = 0f;
+            // New scenery starts appearing on the horizon now and crossfades with the old.
+            AmbientSeaField field = AmbientSeaField.Instance;
+            if (field != null) field.SetScenerySet(target.scenerySet);
+        }
+
         void NextZone()
         {
             Stage++;
-            int next = ZoneIndex + 1;
-            if (next >= zones.Length) next = Mathf.Clamp(loopToZone, 0, zones.Length - 1);
-            lookFrom = BlendSnapshot();
+            int next = NextIndex();
             ZoneIndex = next;
-            lookTo = zones[ZoneIndex];
-            lookT = 0f;
+            if (lookTo != zones[ZoneIndex]) BeginLook(zones[ZoneIndex]);   // (normally already blending since transitionLead)
             ZoneTime = 0f;
             if (Stage == 1) coastLeaving = true;   // leaving the bay
             AnnounceZone();
@@ -313,10 +332,11 @@ namespace StarlitTides
             if (playing)
             {
                 // (The intro animates the sunset itself, so only drive it during play.)
-                sky.sunset = Mathf.MoveTowards(sky.sunset, Mathf.Lerp(lookFrom.sunset, lookTo.sunset, t), Time.deltaTime * 0.2f);
+                sky.sunset = Mathf.MoveTowards(sky.sunset, Mathf.Lerp(lookFrom.sunset, lookTo.sunset, t), Time.deltaTime * 0.12f);
                 sky.ambientAurora = Mathf.Lerp(lookFrom.ambientAurora, lookTo.ambientAurora, t);
                 WeatherManager weather = WeatherManager.Instance;
-                if (weather != null) { weather.forceWeather = true; weather.forcedWeather = Current.weather; }
+                // The weather turns together with the sky (toward the zone being blended in).
+                if (weather != null) { weather.forceWeather = true; weather.forcedWeather = lookTo.weather; }
             }
             else if (inMenu)
             {
@@ -363,7 +383,7 @@ namespace StarlitTides
             probeTimer -= Time.deltaTime;
             if (probeTimer <= 0f)
             {
-                probeTimer = 6f;
+                probeTimer = 15f;   // (each refresh is time-sliced, but still not free)
                 if (ReflectionProbeRefresher.Instance != null) ReflectionProbeRefresher.Instance.Refresh();
             }
 

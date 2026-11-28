@@ -81,6 +81,7 @@ Shader "Skybox/StarlitNight"
             #pragma target 3.5
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #pragma multi_compile _ STARLIT_QUALITY_LOW   // set by SettingsManager on Low
             #include "StarlitNoise.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
@@ -147,6 +148,9 @@ Shader "Skybox/StarlitNight"
                 float3 n = normalize(_GalaxyNormal.xyz);
                 float dist = dot(dir, n);
                 float band = exp(-(dist * dist) / (_GalaxyWidth * _GalaxyWidth));
+                bandMask = band;
+                // Phase 9 (performance): outside the band the noise below is invisible.
+                if (band < 0.004) return 0;
                 float clouds = SN_Fbm3(dir * 4.0, 4);
                 float dust = SN_Fbm3(dir * 9.0 + 3.1, 3);
                 float lane = smoothstep(0.45, 0.65, dust) * exp(-(dist * dist) / (_GalaxyWidth * _GalaxyWidth * 0.12));
@@ -167,6 +171,11 @@ Shader "Skybox/StarlitNight"
                 float d = dot(dir, moonDir);
                 float cosR = cos(_MoonSize);
                 discMask = smoothstep(cosR - 0.00008, cosR + 0.00008, d);
+                // two-part halo: tight bright glow + wide soft scatter
+                float halo = pow(saturate(d), 3000.0) * 1.2 + pow(saturate(d), 120.0) * 0.35 + pow(saturate(d), 12.0) * 0.08;
+                float3 haloCol = _MoonHaloColor.rgb * halo * _MoonHalo * (1.0 - discMask);
+                // Phase 9 (performance): the crater noise only matters on the disc itself.
+                if (discMask <= 0.0) return haloCol;
 
                 // local 2D coordinates on the moon disc (-1..1)
                 float3 up = abs(moonDir.y) < 0.99 ? float3(0, 1, 0) : float3(1, 0, 0);
@@ -179,10 +188,7 @@ Shader "Skybox/StarlitNight"
                 float craters = SN_Fbm2(uv * 9.0, 3);
                 float shade = limb * (1.0 - maria * 0.35) * (0.85 + craters * 0.25);
                 float3 disc = _MoonColor.rgb * shade * discMask;
-
-                // two-part halo: tight bright glow + wide soft scatter
-                float halo = pow(saturate(d), 3000.0) * 1.2 + pow(saturate(d), 120.0) * 0.35 + pow(saturate(d), 12.0) * 0.08;
-                return disc + _MoonHaloColor.rgb * halo * _MoonHalo * (1.0 - discMask);
+                return disc + haloCol;
             }
 
             // Aurora: stacked horizontal slices of a wavy ribbon. Each slice is
@@ -192,7 +198,12 @@ Shader "Skybox/StarlitNight"
             {
                 float3 acc = 0;
                 if (dir.y < 0.01) return acc;
-                const int STEPS = 20;
+                // Phase 9 (performance): 12 slices (8 on Low) instead of 20.
+            #if defined(STARLIT_QUALITY_LOW)
+                const int STEPS = 8;
+            #else
+                const int STEPS = 12;
+            #endif
                 [loop] for (int i = 0; i < STEPS; i++)
                 {
                     float fi = i / (float)(STEPS - 1);
@@ -224,18 +235,35 @@ Shader "Skybox/StarlitNight"
                 sky += _HorizonGlow.rgb * exp(-abs(y) * 14.0);           // thin glowing band at the horizon
                 if (y < 0) sky = lerp(_HorizonColor.rgb * 0.6, _GroundColor.rgb, smoothstep(0.0, 0.2, -y));
 
+                // Phase 9 (performance): the ocean is see-through (refraction), so the sky is
+                // drawn under the whole sea too, on most of the screen. Below the horizon
+                // every layer (stars, Milky Way, aurora, clouds) has faded to zero, so give
+                // the same result without computing them. (Measured: the sky cost ~12 ms a
+                // frame at 2940x1846 on a MacBook Air before this.)
+                if (y < -0.05)
+                {
+                    float3 below = lerp(sky, sky * 0.45, _StormAmount);
+                    if (_SunsetBlend > 0.001)
+                        below = lerp(below, lerp(_SunsetHorizon.rgb * 0.4, _GroundColor.rgb * 3.0, smoothstep(0.0, 0.25, -y)), _SunsetBlend);
+                    below += _LightningColor.rgb * _LightningFlash * 0.06 * _StormAmount;
+                    float belowFog = (1.0 - smoothstep(0.0, _HorizonFogHeight, abs(y))) * _HorizonFogStrength;
+                    below = lerp(below, unity_FogColor.rgb, belowFog * (1.0 - _SunsetBlend * 0.6));
+                    return half4(below, 1);
+                }
+
                 // ---------- storm clouds (computed early: they hide stars) ----------
                 float cloudCover = 0;
                 float3 cloudCol = 0;
                 if (_StormAmount > 0.001)
                 {
                     float2 cuv = dir.xz / (max(y, 0.0) + 0.12);
-                    float cn = SN_Fbm2(cuv * 0.9 + float2(_SkyTime * 0.05, _SkyTime * 0.02), 5);
+                    float cn = SN_Fbm2(cuv * 0.9 + float2(_SkyTime * 0.05, _SkyTime * 0.02), 4);   // Phase 9: 4 octaves (was 5)
                     cloudCover = smoothstep(0.62 - _StormAmount * 0.45, 0.85 - _StormAmount * 0.25, cn) * _StormAmount;
                     cloudCover *= smoothstep(-0.05, 0.08, y);
-                    float flashShape = SN_Fbm2(cuv * 0.5 + 11.0, 3);
-                    cloudCol = _CloudColor.rgb * (0.6 + cn * 0.8)
-                             + _LightningColor.rgb * _LightningFlash * flashShape * (0.4 + cn);
+                    cloudCol = _CloudColor.rgb * (0.6 + cn * 0.8);
+                    // Phase 9 (performance): the flash shape only matters during a flash.
+                    if (_LightningFlash > 0.002)
+                        cloudCol += _LightningColor.rgb * _LightningFlash * SN_Fbm2(cuv * 0.5 + 11.0, 3) * (0.4 + cn);
                     sky = lerp(sky, sky * 0.45, _StormAmount);            // darker, heavier sky
                 }
 
@@ -247,8 +275,8 @@ Shader "Skybox/StarlitNight"
                 {
                     float2 cuv = dir.xz / (max(y, 0.0) + 0.18);
                     float2 wind = float2(_SkyTime * 0.012, _SkyTime * 0.004);
-                    float n = SN_Fbm2(cuv * 0.45 + wind, 5);
-                    float detail = SN_Fbm2(cuv * 1.7 - wind * 2.0, 3);
+                    float n = SN_Fbm2(cuv * 0.45 + wind, 4);              // Phase 9: 4 + 2 octaves (was 5 + 3)
+                    float detail = SN_Fbm2(cuv * 1.7 - wind * 2.0, 2);
                     float shape = n + (detail - 0.5) * 0.25;
                     float lo = 0.62 - _NightCloudCover * 0.35;
                     nc = smoothstep(lo, lo + 0.24, shape) * smoothstep(-0.02, 0.14, y) * (1.0 - _SunsetBlend * 0.5);

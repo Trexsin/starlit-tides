@@ -323,6 +323,32 @@ namespace StarlitTides.EditorTools
             return button;
         }
 
+        // Phase 9: the URP template's SSAO costs GPU time and is invisible in this
+        // glow-lit night scene (measured on a MacBook Air), so it is REMOVED from the
+        // renderer. Only deactivating it broke the player: the build then strips SSAO's
+        // shaders, the inactive feature still tries to load them, and the whole render
+        // pipeline failed to start ("Blitter is already initialized" every frame).
+        public static void RemoveSsao(ScriptableRendererData data)
+        {
+            SerializedObject so = new SerializedObject(data);
+            SerializedProperty features = so.FindProperty("m_RendererFeatures");
+            SerializedProperty map = so.FindProperty("m_RendererFeatureMap");
+            for (int i = features.arraySize - 1; i >= 0; i--)
+            {
+                Object f = features.GetArrayElementAtIndex(i).objectReferenceValue;
+                if (f == null || !(f is ScreenSpaceAmbientOcclusion)) continue;
+                features.GetArrayElementAtIndex(i).objectReferenceValue = null;
+                features.DeleteArrayElementAtIndex(i);
+                if (map != null && i < map.arraySize) map.DeleteArrayElementAtIndex(i);
+                so.ApplyModifiedPropertiesWithoutUndo();
+                AssetDatabase.RemoveObjectFromAsset(f);
+                Object.DestroyImmediate(f, true);
+                so.Update();
+                Debug.Log("[Starlit Tides] Removed the SSAO renderer feature from " + data.name + ".");
+            }
+            EditorUtility.SetDirty(data);
+        }
+
         // A dropdown in the menu style: dark glass, gold caption, a scrolling list
         // of big readable rows (TMP's default is sized for 14 pt text).
         static TMP_Dropdown MakeDropdown(string name, Transform parent, Vector2 anchor, Vector2 position, Vector2 size)
@@ -910,7 +936,10 @@ namespace StarlitTides.EditorTools
                 if (data == null) continue;
                 bool exists = false;
                 foreach (ScriptableRendererFeature f in data.rendererFeatures)
+                {
                     if (f != null && f.name == featureName) { exists = true; ((FullScreenPassRendererFeature)f).passMaterial = material; }
+                }
+                RemoveSsao(data);
                 if (exists) continue;
 
                 FullScreenPassRendererFeature feature = ScriptableObject.CreateInstance<FullScreenPassRendererFeature>();

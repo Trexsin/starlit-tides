@@ -28,7 +28,7 @@ namespace StarlitTides
 
         [Header("Blending")]
         [Tooltip("Seconds to blend from one weather to the next.")]
-        public float transitionTime = 8f;
+        public float transitionTime = 12f;   // Phase 9: slower, in step with the voyage's 14 s look blend
 
         [Header("Storm")]
         public ParticleSystem rain;

@@ -152,7 +152,7 @@ namespace StarlitTides
 
             // Rain: fewer drops on lower settings.
             WeatherManager weather = WeatherManager.Instance;
-            if (weather != null) weather.maxRainRate = Mathf.Lerp(500f, 1400f, q);
+            if (weather != null) weather.maxRainRate = Mathf.Lerp(500f, 1000f, q);   // Phase 9: 1000 on High (was 1400)
 
             // Anti-aliasing: High uses 4x MSAA and Medium 2x (set in their URP assets), which
             // keeps edges sharp. Low has no MSAA, so it gets SMAA on the camera instead.
@@ -178,12 +178,36 @@ namespace StarlitTides
             if (q < 0.25f) Shader.EnableKeyword("STARLIT_QUALITY_LOW");
             else Shader.DisableKeyword("STARLIT_QUALITY_LOW");
 
+            // Phase 9: bloom was the biggest post-processing cost at native resolution
+            // (~3 ms on a MacBook Air). High keeps the smooth high-quality filter; Medium
+            // drops it; Low also blurs at quarter size (soft glows hide the difference).
+            ApplyBloomQuality(QualityLevel, maxLevel);
+
             // Phase 8: moon god rays (a 28-step screen-space march) on High only.
             SkyController sky = FindAnyObjectByType<SkyController>();
             if (sky != null) sky.godRayQuality = q > 0.75f ? 1f : 0f;
             // (The sea field reads the quality itself: AmbientSeaField, 45% .. 100% density.)
 
             PlayerPrefs.Save();
+        }
+
+        UnityEngine.Rendering.Volume nightVolume;
+
+        void ApplyBloomQuality(int level, int maxLevel)
+        {
+            if (nightVolume == null)
+            {
+                // The night look's volume, found by name (other global volumes are flashes and overlays).
+                foreach (UnityEngine.Rendering.Volume v in FindObjectsByType<UnityEngine.Rendering.Volume>())
+                    if (v.name == "Global Volume") { nightVolume = v; break; }
+            }
+            if (nightVolume == null || nightVolume.sharedProfile == null) return;
+            // .profile makes a runtime copy, so the saved asset is never changed.
+            if (nightVolume.profile.TryGet(out UnityEngine.Rendering.Universal.Bloom bloom))
+            {
+                bloom.highQualityFiltering.Override(level >= maxLevel);
+                bloom.downscale.Override(level == 0 ? UnityEngine.Rendering.Universal.BloomDownscaleMode.Quarter : UnityEngine.Rendering.Universal.BloomDownscaleMode.Half);
+            }
         }
     }
 }

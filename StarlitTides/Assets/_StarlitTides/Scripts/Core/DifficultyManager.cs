@@ -103,7 +103,8 @@ namespace StarlitTides
             if (game != null && game.State == GameState.GameOver) target = idleTideSpeed * 0.5f;
 
             // Change speed gradually so it never feels like a jolt.
-            ocean.tideSpeed = Mathf.MoveTowards(ocean.tideSpeed, target, 2.5f * Time.deltaTime);
+            // Gentle: a new zone's extra speed builds up over a few seconds (1.2 m/s per second).
+            ocean.tideSpeed = Mathf.MoveTowards(ocean.tideSpeed, target, 1.2f * Time.deltaTime);
         }
     }
 }

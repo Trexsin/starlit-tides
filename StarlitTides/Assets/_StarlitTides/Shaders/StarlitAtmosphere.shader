@@ -90,7 +90,7 @@ Shader "Hidden/StarlitTides/Atmosphere"
                     if (moonCS.w > 0.0)
                     {
                         float2 moonUV = ComputeNormalizedDeviceCoordinates(moonPos, UNITY_MATRIX_VP);
-                        const int STEPS = 28;
+                        const int STEPS = 16;   // Phase 9 (performance): was 28; the gathered light decays fast anyway
                         float2 delta = (moonUV - uv) / STEPS;
                         float2 suv = uv;
                         float decay = 1.0, light = 0.0;

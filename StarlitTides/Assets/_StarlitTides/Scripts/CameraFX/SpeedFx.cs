@@ -29,7 +29,7 @@ namespace StarlitTides
         [Tooltip("Extra vertical FOV at full speed (degrees).")]
         public float maxFovBoost = 9f;
         public float kickFov = 7f;
-        public float maxShake = 0.045f;
+        public float maxShake = 0.025f;
 
         [Header("Effects (built by Phase9Builder)")]
         public ParticleSystem waterStreaks;
@@ -43,11 +43,13 @@ namespace StarlitTides
         public float airLineRate = 70f;
 
         public float Speed01 { get; private set; }
+        /// <summary>The smoothed punch (eases in and out, never snaps).</summary>
         public float Kick { get; private set; }
+        float kickTarget;
         /// <summary>Degrees added to the gameplay camera's FOV.</summary>
         public float FovBoost { get { return Speed01 * maxFovBoost + Kick * kickFov; } }
         /// <summary>Metres of camera shake right now.</summary>
-        public float Shake { get { return (Mathf.Max(0f, Speed01 - 0.35f) / 0.65f) * maxShake + Kick * 0.05f; } }
+        public float Shake { get { return (Mathf.Max(0f, Speed01 - 0.35f) / 0.65f) * maxShake + Kick * 0.015f; } }
 
         void Awake()
         {
@@ -76,11 +78,11 @@ namespace StarlitTides
         void HandleZone(VoyageDirector.Zone zone, int voyage)
         {
             if (VoyageDirector.Instance != null && VoyageDirector.Instance.Stage == 0) return;   // not on the very first zone
-            AddKick(1.3f);
-            if (airLines != null) airLines.Emit(40);
+            AddKick(0.3f);    // a gentle surge (a strong punch made the zone change feel abrupt)
+            if (airLines != null) airLines.Emit(12);
         }
 
-        public void AddKick(float amount) { Kick = Mathf.Max(Kick, amount); }
+        public void AddKick(float amount) { kickTarget = Mathf.Max(kickTarget, amount); }
 
         void Update()
         {
@@ -90,7 +92,9 @@ namespace StarlitTides
             float tide = OceanController.Instance != null ? OceanController.Instance.tideSpeed : slowTide;
             float target = playing ? Mathf.Clamp01((tide - slowTide) / Mathf.Max(1f, fastTide - slowTide)) : 0f;
             Speed01 = Mathf.MoveTowards(Speed01, target, dt * 0.5f);
-            Kick = Mathf.MoveTowards(Kick, 0f, dt * 1.6f);
+            // The target fades out; the kick follows it smoothly (in over ~0.2 s, out over ~1 s).
+            kickTarget = Mathf.MoveTowards(kickTarget, 0f, dt * 0.9f);
+            Kick = Mathf.Lerp(Kick, kickTarget, 1f - Mathf.Exp(-(kickTarget > Kick ? 10f : 4f) * dt));
 
             bool dashing = BoatController.Instance != null && BoatController.Instance.IsDashing;
             float speedNow = playing ? tide : tide * 0.6f;
@@ -119,7 +123,7 @@ namespace StarlitTides
             }
 
             if (speedVolume != null)
-                speedVolume.weight = Mathf.Clamp01(Speed01 * 0.35f + Kick * 0.8f);
+                speedVolume.weight = Mathf.Clamp01(Speed01 * 0.3f + Kick * 0.5f);
         }
     }
 }

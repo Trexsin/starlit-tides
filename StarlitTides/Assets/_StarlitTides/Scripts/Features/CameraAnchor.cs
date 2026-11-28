@@ -6,8 +6,10 @@
 // see the glowing buoys that mark the channel edge. With followX = 1 the boat
 // would sit dead centre and the lane edges would feel like invisible walls.
 //
-// It runs after BoatController (execution order) and before Cinemachine
-// (which updates in LateUpdate), so the camera never lags a frame behind.
+// It runs in Update after BoatController (execution order 100), so the anchor
+// is in place before Cinemachine moves the camera in LateUpdate. (Phase 9 fix:
+// it used to run in LateUpdate too, which with order 100 is AFTER Cinemachine's
+// brain (order 0): the camera always chased last frame's boat position.)
 
 using UnityEngine;
 
@@ -22,7 +24,7 @@ namespace StarlitTides
         [Tooltip("How much of the boat's bobbing the camera follows (0..1). Low = steadier view.")]
         [Range(0f, 1f)] public float followY = 0.25f;
 
-        void LateUpdate()
+        void Update()
         {
             if (boat == null)
             {
@@ -33,11 +35,12 @@ namespace StarlitTides
             Vector3 p = boat.position;
             Vector3 anchor = new Vector3(p.x * followX, p.y * followY, p.z);
 
-            // Phase 9: a light, smooth shake when the boat is fast (SpeedFx).
+            // Phase 9: a gentle, slow sway when the boat is fast (SpeedFx). (A fast 9 Hz
+            // shake read as the picture stuttering, so it is slow and small now.)
             if (SpeedFx.Instance != null && Time.timeScale > 0f)
             {
                 float amount = SpeedFx.Instance.Shake;
-                float t = Time.time * 9f;
+                float t = Time.time * 1.3f;
                 anchor += new Vector3(Mathf.PerlinNoise(t, 0.3f) - 0.5f, Mathf.PerlinNoise(0.7f, t) - 0.5f, 0f) * (2f * amount);
             }
             transform.position = anchor;

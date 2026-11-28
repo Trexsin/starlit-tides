@@ -81,6 +81,14 @@ namespace StarlitTides.EditorTools
             HiddenOrbs hidden = Object.FindAnyObjectByType<HiddenOrbs>();
             if (hidden != null) { hidden.spawnInterval = new Vector2(10f, 16f); hidden.lightValue = 0.15f; EditorUtility.SetDirty(hidden); }
 
+            // ---- smooth zone changes (values that live in the scene) ----
+            voyage.lookBlendTime = 14f;
+            voyage.transitionLead = 6f;
+            WeatherManager weather = Object.FindAnyObjectByType<WeatherManager>();
+            if (weather != null) { weather.transitionTime = 12f; EditorUtility.SetDirty(weather); }
+            AmbientSeaField field = Object.FindAnyObjectByType<AmbientSeaField>();
+            if (field != null) { field.sceneryCrossfade = 18f; EditorUtility.SetDirty(field); }
+
             // ---- speed ----
             BuildSpeedFx(root);
 

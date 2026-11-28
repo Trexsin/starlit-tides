@@ -72,16 +72,19 @@ namespace StarlitTides
         float density = 1f;
         float setPieceTimer;
         int activeSet = 0;
+        int previousSet = -1;      // the set being faded out (-1 = none)
+        float setBlend = 1f;       // 0 = all previous set, 1 = all active set
+        [Tooltip("Seconds the old zone's scenery takes to give way to the new zone's.")]
+        public float sceneryCrossfade = 18f;
 
-        Band[] ActiveBands
+        Band[] BandsOf(int set)
         {
-            get
-            {
-                if (activeSet > 0 && zoneSets != null && activeSet < zoneSets.Length && zoneSets[activeSet] != null)
-                    return zoneSets[activeSet].bands;
-                return bands;
-            }
+            if (set > 0 && zoneSets != null && set < zoneSets.Length && zoneSets[set] != null)
+                return zoneSets[set].bands;
+            return bands;
         }
+
+        Band[] ActiveBands { get { return BandsOf(activeSet); } }
 
         void Awake()
         {
@@ -98,7 +101,10 @@ namespace StarlitTides
         {
             index = Mathf.Max(0, index);
             if (index == activeSet) return;
+            // Crossfade: both sets keep spawning for a while, the old one less and less.
+            previousSet = activeSet;
             activeSet = index;
+            setBlend = 0f;
             foreach (Band b in ActiveBands) b.travelled = 0f;
         }
 
@@ -140,17 +146,13 @@ namespace StarlitTides
             float tide = OceanController.Instance != null ? OceanController.Instance.tideSpeed : 6f;
             float step = tide * Time.deltaTime;
 
-            foreach (Band b in ActiveBands)
+            if (previousSet >= 0)
             {
-                if (b.prefabs == null || b.prefabs.Length == 0) continue;
-                b.travelled += step;
-                float spacing = Spacing(b);
-                while (b.travelled >= spacing)
-                {
-                    b.travelled -= spacing;
-                    SpawnRow(b, b.spawnZ - b.travelled);
-                }
+                setBlend = Mathf.MoveTowards(setBlend, 1f, Time.deltaTime / Mathf.Max(0.1f, sceneryCrossfade));
+                if (setBlend >= 1f) previousSet = -1;
             }
+            Advance(ActiveBands, step, setBlend);
+            if (previousSet >= 0 && previousSet != activeSet) Advance(BandsOf(previousSet), step, 1f - setBlend);
 
             GameManager game = GameManager.Instance;
             // Back on the menu: the bay's own scenery again.
@@ -165,6 +167,22 @@ namespace StarlitTides
                     Vector3 p = new Vector3(side * Random.Range(setPieceDistance.x, setPieceDistance.y), 0f, setPieceZ);
                     if (!SeaDecor.IsOpenWater(p, -1.5f)) p.x = Mathf.Abs(p.x);   // the coast is on the left: use the open-sea side
                     PoolManager.Spawn(setPieces[Random.Range(0, setPieces.Length)], p, Quaternion.identity);
+                }
+            }
+        }
+
+        // Moves a set's bands along; each row spawns with probability 'chance' (the crossfade).
+        void Advance(Band[] set, float step, float chance)
+        {
+            foreach (Band b in set)
+            {
+                if (b.prefabs == null || b.prefabs.Length == 0) continue;
+                b.travelled += step;
+                float spacing = Spacing(b);
+                while (b.travelled >= spacing)
+                {
+                    b.travelled -= spacing;
+                    if (Random.value <= chance) SpawnRow(b, b.spawnZ - b.travelled);
                 }
             }
         }

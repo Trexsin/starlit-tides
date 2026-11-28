@@ -287,10 +287,12 @@ Shader "StarlitTides/Ocean"
                 float2 slopeLow = float2(hlx - hl, hlz - hl) / e * _RippleStrength * distanceFade;
                 return normalize(float3(-slopeLow.x, 1, -slopeLow.y));
             #endif
-                float h  = SN_Fbm2(p + o1, 3) + SN_Fbm2(p * 1.7 + o2, 2) * 0.5;
-                float hx = SN_Fbm2(p + float2(e, 0) + o1, 3) + SN_Fbm2((p + float2(e, 0)) * 1.7 + o2, 2) * 0.5;
-                float hz = SN_Fbm2(p + float2(0, e) + o1, 3) + SN_Fbm2((p + float2(0, e)) * 1.7 + o2, 2) * 0.5;
-                float2 slope = float2(hx - h, hz - h) / e;
+                // Phase 9 (performance): one 3-octave layer (15 noise lookups in all, was 21);
+                // the second, finer layer this replaced is covered by the micro ripples below.
+                float h  = SN_Fbm2(p + o1, 3);
+                float hx = SN_Fbm2(p + float2(e, 0) + o1, 3);
+                float hz = SN_Fbm2(p + float2(0, e) + o1, 3);
+                float2 slope = float2(hx - h, hz - h) / e * 1.15;   // (a touch stronger: one layer instead of two)
                 // Micro ripples: a fine, fast layer that gives close water a crisp,
                 // detailed sparkle. Faded out with distance so it never shimmers.
                 float2 pf = p * 4.3 + float2(t * 1.1, -t * 0.8);

@@ -37,7 +37,7 @@ namespace StarlitTides
         const string WidthKey = "ST_ResolutionWidth";          // the chosen width (0 = native)
         const string OldScaleKey = "ST_RenderScaleIndex";       // Phase 8 step 9 (percent steps)
         const string DetectedKey = "ST_DisplayAutoDetected";   // bump the value to re-run auto-detect for everyone
-        const int DetectVersion = 3;   // 3: resolutions became a real list
+        const int DetectVersion = 7;   // 7: shaders ~30% cheaper, pick again; 6: rejects readings from a hidden window; 5: steadier auto-detect that starts from High; 4: the real below-the-notch fullscreen size (3: resolutions became a real list)
 
         /// <summary>The sizes in the dropdown, biggest (native) first.</summary>
         public List<Vector2Int> Options { get; private set; }
@@ -103,6 +103,7 @@ namespace StarlitTides
 
         void Update()
         {
+            WatchFrameRate();
             // The window was resized, or the fullscreen switch finished: refresh the labels.
             if (Screen.width != lastWidth || Screen.height != lastHeight)
             {
@@ -142,13 +143,26 @@ namespace StarlitTides
         }
 
         /// <summary>
-        /// The display's real pixel size (2940 x 1912 on a 13" MacBook Air at its default
-        /// scaling). Not Screen.currentResolution: in fullscreen that reports the game's
-        /// current mode (it said 1280 x 720 on the dev Mac), not the display.
+        /// The biggest picture a fullscreen game can really have on this display.
+        /// On a MacBook with a camera notch that is NOT the panel size: the panel is
+        /// 2940 x 1912, but macOS gives fullscreen apps the area below the notch,
+        /// 2940 x 1846. Asking for 1912 made Unity squeeze the taller picture into the
+        /// shorter space with black bars down both sides (Phase 9 diagnostics), so we
+        /// use the largest size Unity lists (Screen.resolutions), which is the
+        /// below-the-notch size on a Mac and the monitor's size on Windows.
+        /// (Not Screen.currentResolution: in fullscreen it reports the game's own mode.)
         /// </summary>
         public static Vector2Int NativeSize()
         {
-            int w = Display.main.systemWidth, h = Display.main.systemHeight;
+            int w = 0, h = 0;
+            foreach (Resolution r in Screen.resolutions)
+                if ((long)r.width * r.height > (long)w * h) { w = r.width; h = r.height; }
+            if (w <= 0 || h <= 0)
+            {
+                DisplayInfo info = Screen.mainWindowDisplayInfo;
+                w = info.width; h = info.height;
+            }
+            if (w <= 0 || h <= 0) { w = Display.main.systemWidth; h = Display.main.systemHeight; }
             if (w <= 0 || h <= 0) { w = Screen.currentResolution.width; h = Screen.currentResolution.height; }
             return new Vector2Int(w, h);
         }
@@ -295,71 +309,161 @@ namespace StarlitTides
             return hz > 1.0 ? (float)hz : 60f;
         }
 
+        // Phase 9 rewrite. Measured on a MacBook Air (M4): with vSync off, Metal frame
+        // times swing between ~9 ms and ~100 ms (the CPU runs ahead, then waits for a
+        // free drawable), so one short measurement is noisy. The old routine once
+        // measured a SMALLER size as slower and fell all the way to a blurry 57%.
+        // Now: start from the best quality, measure longer, re-measure before
+        // trusting a bad result, and prefer a sharp picture (>= ~70% of the width)
+        // over High quality.
         IEnumerator AutoDetectRoutine()
         {
             Detecting = true;
             SettingsManager settings = SettingsManager.Instance;
+            int startQuality = settings != null ? settings.QualityLevel : 0;
+            int startScale = ScaleIndex;
+            invalidReading = false;
 
-            // Start from the best: fullscreen, native, 100%.
+            // Start from the best: fullscreen, native, the highest quality.
             if (!Application.isEditor)
             {
                 if (settings != null && !settings.Fullscreen) settings.SetFullscreen(true);
                 else SetFullscreen(true);
             }
+            if (settings != null) while (settings.QualityLevel < QualitySettings.names.Length - 1) settings.StepQuality(1);
             SetScaleIndex(0);
 
-            // The goal is a steady 60 fps (or the display's rate if lower). The quality
-            // levels use vSync, which caps the frame rate at the refresh rate and would
-            // hide how much headroom there is, so vSync is off while measuring. Ask for
-            // 10% headroom: the menu view is a little lighter than a busy run.
+            // The goal is a steady 60 fps (or the display's rate if lower), with ~12%
+            // headroom: gameplay gets busier than the menu this is measured in.
             int savedVSync = QualitySettings.vSyncCount;
             int savedTarget = Application.targetFrameRate;
-            float target = Mathf.Min(60f, RefreshRate()) * 1.1f;
-            // Below ~60% of the native width the picture gets soft.
-            int softest = 0;
-            while (softest < Options.Count - 1 && Fraction(softest + 1) >= 0.58f) softest++;
+            float target = Mathf.Min(60f, RefreshRate()) * 1.12f;
+            int softest = 0;   // the smallest size we accept before lowering the quality
+            while (softest < Options.Count - 1 && Fraction(softest + 1) >= 0.68f) softest++;
             float fps = 0f;
+            bool done = false;
 
-            for (int attempt = 0; attempt < 6; attempt++)
+            for (int guard = 0; guard < 8 && !done; guard++)
             {
-                // (A percentage: the pixel size isn't known until the screen switch finishes.)
-                SetStatus("Finding the best resolution: testing " + Mathf.RoundToInt(RenderScale * 100f) + "% on " + (settings != null ? settings.QualityName : "") + "...");
-                QualitySettings.vSyncCount = 0;          // (re-set each pass: StepQuality restores the level's vSync)
-                Application.targetFrameRate = -1;
-                // Let the new size settle (shaders, the screen switch, the reflection probe).
-                yield return new WaitForSecondsRealtime(attempt == 0 ? 2.5f : 1.5f);
-                yield return Measure(2.5f, result => fps = result);
-                Debug.Log("[Starlit Tides] Auto-detect: " + ResolutionLabel() + " (" + Mathf.RoundToInt(RenderScale * 100f) + "%) on "
-                          + (settings != null ? settings.QualityName : "?") + ": " + fps.ToString("0.0") + " fps uncapped (want " + target.ToString("0") + ")");
-                if (fps >= target) break;   // fast enough: done
+                // 1. how fast is this quality at the native size?
+                SetScaleIndex(0);
+                yield return MeasureSettled(target, result => fps = result);
+                if (invalidReading) break;
+                if (fps >= target) break;
 
-                // Frame time grows roughly with the number of pixels (scale squared), so the
-                // scale that should reach the target is the current one times sqrt(fps / target).
-                // This can also go UP after a quality drop freed some time.
-                float wanted = RenderScale * Mathf.Sqrt(fps / target);
-                int next = 0;
-                while (next < Options.Count - 1 && Fraction(next) > wanted + 0.001f) next++;
-
-                if (next > softest && settings != null && settings.QualityLevel > 0)
+                // 2. frame time grows with the number of pixels (scale squared), so this
+                //    size should reach the target; verify it, and one size lower if needed
+                float wanted = Mathf.Sqrt(fps / target);
+                int pick = 0;
+                while (pick < Options.Count - 1 && Fraction(pick) > wanted + 0.001f) pick++;
+                for (int tries = 0; tries < 2 && pick <= softest; tries++, pick++)
                 {
-                    // Would need a very soft picture: lower the quality level instead, and
-                    // test again from 100%.
-                    settings.StepQuality(-1);
-                    SetScaleIndex(0);
-                    continue;
+                    SetScaleIndex(pick);
+                    yield return MeasureSettled(target, result => fps = result);
+                    if (invalidReading) break;
+                    if (fps >= target * 0.97f) { done = true; break; }
                 }
-                if (next == ScaleIndex) break;   // already the right step (or nothing lower left)
-                SetScaleIndex(next);
+                if (done || invalidReading) break;
+
+                // 3. still too slow at a sharp size: one quality level down, and again
+                if (settings != null && settings.QualityLevel > 0) { settings.StepQuality(-1); continue; }
+
+                // Lowest quality already: accept a softer picture.
+                for (int i = softest + 1; i < Options.Count; i++)
+                {
+                    SetScaleIndex(i);
+                    yield return MeasureSettled(target, result => fps = result);
+                    if (invalidReading || fps >= target * 0.97f) break;
+                }
+                break;
             }
 
             QualitySettings.vSyncCount = savedVSync;
             Application.targetFrameRate = savedTarget;
+            if (invalidReading)
+            {
+                // The window wasn't on screen (hidden behind another app, another Space,
+                // or the display asleep): macOS then skips drawing and the frame rate
+                // reads in the thousands. Keep the old settings and try again next launch.
+                if (settings != null) while (settings.QualityLevel != startQuality) settings.StepQuality(settings.QualityLevel < startQuality ? 1 : -1);
+                SetScaleIndex(startScale);
+                Detecting = false;
+                detectRoutine = null;
+                Debug.Log("[Starlit Tides] Auto-detect: the window wasn't visible, nothing measured. It will try again next launch.");
+                SetStatus("Couldn't measure (the game window wasn't visible). Press Auto-detect to try again.");
+                yield break;
+            }
             PlayerPrefs.SetInt(DetectedKey, DetectVersion);
             PlayerPrefs.Save();
             Detecting = false;
             detectRoutine = null;
             SetStatus("Auto-picked for this device: " + ResolutionLabel() + ", "
                       + (settings != null ? settings.QualityName : "") + ", " + Mathf.RoundToInt(Mathf.Min(fps, RefreshRate())) + " fps");
+        }
+
+        // Lets a new size or quality settle, measures for 4 s with vSync off, and if that
+        // reads below the target measures once more and keeps the better reading.
+        bool invalidReading;
+
+        IEnumerator MeasureSettled(float target, System.Action<float> done)
+        {
+            SettingsManager settings = SettingsManager.Instance;
+            SetStatus("Finding the best settings: testing " + ResolutionLabel() + " on " + (settings != null ? settings.QualityName : "") + "...");
+            float best = 0f;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                QualitySettings.vSyncCount = 0;          // (re-set each pass: StepQuality restores the level's vSync)
+                Application.targetFrameRate = -1;
+                yield return new WaitForSecondsRealtime(pass == 0 ? 2f : 0.5f);
+                float fps = 0f;
+                yield return Measure(4f, result => fps = result);
+                // No game draws this scene at 4x the display rate: a reading like that
+                // means nothing was drawn. Wait and re-measure a few times before giving up.
+                float impossible = Mathf.Max(300f, RefreshRate() * 4f);
+                for (int retry = 0; fps > impossible && retry < 4; retry++)
+                {
+                    Debug.Log("[Starlit Tides] Auto-detect: " + fps.ToString("0") + " fps is impossible (window not visible?), waiting...");
+                    yield return new WaitForSecondsRealtime(3f);
+                    QualitySettings.vSyncCount = 0; Application.targetFrameRate = -1;
+                    yield return Measure(4f, result => fps = result);
+                }
+                if (fps > impossible) { invalidReading = true; done(0f); yield break; }
+                best = Mathf.Max(best, fps);
+                Debug.Log("[Starlit Tides] Auto-detect: " + ResolutionLabel() + " (" + Mathf.RoundToInt(RenderScale * 100f) + "%) on "
+                          + (settings != null ? settings.QualityName : "?") + ": " + fps.ToString("0.0") + " fps uncapped (want " + target.ToString("0") + ")");
+                if (best >= target) break;
+            }
+            done(best);
+        }
+
+        // ---------------------------------------------------------------- safety net
+
+        // During play: if the game keeps missing frames (more than 4% of frames take
+        // over 1.6x the display's frame time, for 5 s in a row), step the resolution
+        // down one size and say so in Settings. Never below ~50%, at most every 12 s.
+        float missWindowStart, lastDrop = -100f;
+        int missFrames, windowFrames;
+
+        void WatchFrameRate()
+        {
+            GameManager game = GameManager.Instance;
+            if (Detecting || game == null || game.State != GameState.Playing || Time.timeScale < 0.9f) { missFrames = windowFrames = 0; missWindowStart = Time.unscaledTime; return; }
+            float budget = 1f / Mathf.Max(30f, Mathf.Min(60f, RefreshRate()));
+            // Real time between frames (FramePacer may lock the game clock to the refresh rate).
+            float dt = FramePacer.Instance != null ? FramePacer.RealDeltaTime : Time.unscaledDeltaTime;
+            if (dt > 0.5f) return;   // a pause or alt-tab, not a slow frame
+            windowFrames++;
+            if (dt > budget * 1.6f) missFrames++;
+            if (Time.unscaledTime - missWindowStart < 5f) return;
+
+            bool struggling = windowFrames > 0 && missFrames > windowFrames * 0.04f;
+            missFrames = windowFrames = 0;
+            missWindowStart = Time.unscaledTime;
+            if (!struggling || Time.unscaledTime - lastDrop < 12f || ScaleIndex >= Options.Count - 1 || Fraction(ScaleIndex + 1) < 0.5f) return;
+            lastDrop = Time.unscaledTime;
+            SetScaleIndex(ScaleIndex + 1);
+            Debug.Log("[Starlit Tides] Frame rate dropping: resolution lowered to " + ResolutionLabel());
+            SetStatus("Lowered to " + ResolutionLabel() + " automatically to keep the game smooth");
         }
 
         void SetStatus(string text)

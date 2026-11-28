@@ -51,8 +51,14 @@ namespace StarlitTides
 
         public void Refresh()
         {
-            if (probe != null && probe.mode == ReflectionProbeMode.Realtime)
-                probe.RenderProbe();
+            if (probe == null || probe.mode != ReflectionProbeMode.Realtime) return;
+            // During play, spread the six cube faces over several frames: rendering
+            // them all at once caused a visible hitch (Phase 9 frame-time diagnostics).
+            // The menu and loading still render them at once (nothing moves yet).
+            GameManager game = GameManager.Instance;
+            bool playing = Application.isPlaying && game != null && game.State == GameState.Playing;
+            probe.timeSlicingMode = playing ? ReflectionProbeTimeSlicingMode.IndividualFaces : ReflectionProbeTimeSlicingMode.AllFacesAtOnce;
+            probe.RenderProbe();
         }
     }
 }
