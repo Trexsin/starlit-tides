@@ -102,7 +102,7 @@ Shader "StarlitTides/Jellyfish"
             {
                 float3 N = normalize(IN.normalWS);
                 float3 V = normalize(GetWorldSpaceViewDir(IN.positionWS));
-                float rim = pow(1.0 - abs(dot(N, V)), _RimPower);
+                float rim = pow(saturate(1.0 - abs(dot(N, V))), _RimPower);   // saturate: rounding can push it below 0, and pow() of a negative is NaN on DirectX
                 float glow = 0.75 + 0.35 * IN.pulse;
 
                 float3 col;

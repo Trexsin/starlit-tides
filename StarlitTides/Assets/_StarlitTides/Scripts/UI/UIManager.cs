@@ -102,7 +102,7 @@ namespace StarlitTides
             SetVisible(pauseScreen, screen == Screen.Pause);
             SetVisible(gameOverScreen, screen == Screen.GameOver);
 
-            if (screen == Screen.Settings && settingsView != null) settingsView.Refresh();
+            if (screen == Screen.Settings && settingsView != null) settingsView.Open();   // (unapplied changes from last time are dropped)
             if (screen == Screen.GameOver && gameOverView != null) gameOverView.Show();
 
             // Give keyboard / gamepad navigation a starting point.
@@ -126,7 +126,8 @@ namespace StarlitTides
         void HandleStateChanged(GameState state)
         {
             if (state == GameState.Paused) Show(Screen.Pause);
-            else if (state == GameState.Playing && (Current == Screen.Pause || Current == Screen.Settings)) Show(Screen.None);
+            // A run is under way: no menu screen may stay on top of it, however the run started.
+            else if (state == GameState.Playing && Current != Screen.None) Show(Screen.None);
         }
 
         // The run has been saved: now show the Game Over screen.

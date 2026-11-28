@@ -23,6 +23,10 @@ namespace StarlitTides
         [Range(0f, 1f)] public float followX = 0.55f;
         [Tooltip("How much of the boat's bobbing the camera follows (0..1). Low = steadier view.")]
         [Range(0f, 1f)] public float followY = 0.25f;
+        [Tooltip("How much of the boat's forward/back movement the camera follows (0..1). Below 1 the boat visibly moves up the screen when you go forward.")]
+        [Range(0f, 1f)] public float followZ = 0.75f;
+        [Tooltip("The boat's resting Z (the camera follows movement away from here).")]
+        public float restZ = 2f;
 
         void Update()
         {
@@ -33,7 +37,7 @@ namespace StarlitTides
             }
 
             Vector3 p = boat.position;
-            Vector3 anchor = new Vector3(p.x * followX, p.y * followY, p.z);
+            Vector3 anchor = new Vector3(p.x * followX, p.y * followY, Mathf.Lerp(restZ, p.z, followZ));
 
             // Phase 9: a gentle, slow sway when the boat is fast (SpeedFx). (A fast 9 Hz
             // shake read as the picture stuttering, so it is slow and small now.)

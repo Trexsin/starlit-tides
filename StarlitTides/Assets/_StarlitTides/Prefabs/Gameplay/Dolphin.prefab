@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 7113925801067989060}
   - component: {fileID: 185014958256526144}
   - component: {fileID: 9150183691535809253}
-  - component: {fileID: 8933210085978355346}
   m_Layer: 0
   m_Name: Dolphin
   m_TagString: Untagged
@@ -79,7 +78,7 @@ MonoBehaviour:
   despawnX: 45
   followWaves: 0.8
   type: 3
-  lightDamage: 0.15
+  lightDamage: 0.2
   radius: 1.4
   visual: {fileID: 6146961411861434699}
   rollSpeed: 0
@@ -97,30 +96,6 @@ MonoBehaviour:
   glowLight: {fileID: 6969587451806681405}
   hitCollider: {fileID: 185014958256526144}
   telegraph: {fileID: 0}
---- !u!114 &8933210085978355346
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 100520793211212945}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 75572a10d395c4e298c0ddf799fbe491, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.WaterDisturber
-  radius: 1.7
-  strength: 0.9
-  pulse: 0
-  pulseSpeed: 2
-  maxHeightAboveWater: 2.5
-  leaveTrail: 0
-  trailSpacing: 0.8
-  trailRadius: 1.2
-  trailStrength: 0.8
-  trailLife: 1.8
-  minTrailInterval: 0.07
-  strengthMultiplier: 1
 --- !u!1 &1669529905103920072
 GameObject:
   m_ObjectHideFlags: 0

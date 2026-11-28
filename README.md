@@ -1,104 +1,100 @@
-# 🌊 Starlit Tides
+# Starlit Tides
 
-A 3D arcade survival game for a university **Computer Graphics** course, built in **Unity 6 (URP)**.
+A 3D arcade game made in Unity 6 (URP) for my Computer Graphics course.
 
-Steer a small glowing paper boat out across a dark night sea, away from a sleeping coastal village. Real bioluminescent beaches inspired the setting: the boat's light slowly fades, so you keep collecting glowing plankton orbs to stay alive while dodging rocks, drifting logs, jellyfish and glowing sea creatures: manta rays, sea turtles and leaping dolphins. If the light runs out, darkness swallows the boat.
+You sail a small glowing paper boat out of a sleeping harbour and into the open sea at night. The boat's light slowly fades, so you keep it alive by collecting glowing plankton orbs. Hitting rocks, logs, jellyfish or sea creatures costs light, and when it runs out the boat sinks into the dark. The voyage passes through six zones, each with its own sky, sea and animals, and each one lasts longer and gets harder than the last.
 
-![Gameplay](Phase8/Preview/phase8_hero.png)
+![Main menu](docs/Phase9/ReleaseCheck/tour_0_menu.jpg)
 
-| | |
-|---|---|
-| ![](Phase8/Preview/step5_menu.png) **The bay (main menu)** | ![](Phase8/Preview/step4_storm.png) **Storm, with the humpback breaching** |
+## Playing the game
 
-| | |
-|---|---|
-| ![](Phase6/Preview/hud.png) **Gameplay** | ![](Phase5/Preview/whale_breach.png) **The glowing whale** |
-| ![](Phase4/Preview/storm.png) **Storm weather** | ![](Phase4/Preview/aurora.png) **Aurora night** |
+Ready-made builds are in [`StarlitTides/Builds/`](StarlitTides/Builds/):
 
-## Highlights
+- **Windows (10/11, 64-bit):** unzip `StarlitTides-Windows.zip` and run `StarlitTides.exe`. If SmartScreen warns about an unknown app, click *More info* and then *Run anyway*.
+- **macOS (12 or newer, Apple Silicon or Intel):** open `macOS/StarlitTides.app`. The app isn't notarised, so the first time macOS may refuse to open it. Right-click it and choose *Open*, or allow it in *System Settings > Privacy & Security*.
 
-**Graphics**
-- **Stylized "Moonlit Storybook" look** (Phase 8): a hand-written toon-soft shader with banded light, indigo shadows, a moonlit rim, painted gradients and inverted-hull outlines; smoothing groups and soft foliage normals on the procedural meshes; heightfield mountains with snow; a code-built colour-grading LUT
-- **Layered particle effects** (Phase 8): a custom particle shader with white-hot cores and soft particles, a procedural sprite set (star sparkles, shockwave rings, mist flipbooks, anamorphic flares), and shockwaves that sit on the waves, light trails, mist and rain ripples
-- **A living sea beyond the lane** (Phase 8): algae blooms, paper lanterns, sea stacks, a rock arch, fishing boats, whale spouts, horizon islands, and a glowing wake behind the boat
-- **Bioluminescent ocean shader** (hand-written URP HLSL): Gerstner waves, depth colour, refraction, Fresnel reflections, shoreline foam, and neon plankton glow around every object that touches the water
-- **Procedural night sky**: twinkling stars, Milky Way, moon, animated aurora, storm clouds with lightning, sunset
-- **One-click world builder**: village with glowing windows, lantern-lit square, market stalls, pier, arched bridge over a lagoon, lighthouse with sweeping volumetric beams, forest, grassland and layered mountains
-- **Procedural sea creatures**: a manta ray, a sea turtle and a dolphin, built in code and animated by one shader that reads fin and tail masks from vertex colours. They have glowing spots, turtle-shell seams and flank stripes
-- **Sharp image**: 4× MSAA, a contrast-adaptive sharpening pass (CAS) after post-processing, 1024 px terrain textures with normal maps, and detailed rocks
-- **Procedural whale**: a lofted mesh with a custom shader (swimming vertex wave, plankton spots, glowing belly grooves, Fresnel rim)
+On the first launch the game measures your computer and picks a 3D resolution and quality level that keep it at around 60 fps. You can change everything afterwards in Settings.
 
-**Gameplay**
-- Light meter, pooled orbs and obstacles, Cinemachine camera with impulse shake, hit-stop and a difficulty ramp
-- **Six extra features**:
-  1. a light meter that visibly shrinks your light and darkens the screen
-  2. combos
-  3. a golden shooting star that triggers *Starburst*
-  4. weather that changes with your score (calm → storm → aurora)
-  5. near-miss slow motion
-  6. a Timeline day-to-night intro cinematic
-- **Five bonus features**:
-  7. the glowing whale event
-  8. a living village with hidden orbs revealed by the lighthouse
-  9. Photo Mode with filters and depth of field
-  10. fully procedural adaptive music and sound (no audio files)
-  11. saved high scores and stats
-
-**Finished game**
-- Main menu with a living 3D background, HUD with a radial light meter, How to Play, Settings, Pause and Game Over screens with fades
-- Saved settings (volumes, fullscreen, resolution, FPS counter, intro on/off) and **Low / Medium / High** quality presets. On the first launch the game measures the device and picks the best resolution and quality (Settings → **Auto-detect** runs it again); resolution is the 3D render scale with FSR upscaling, so menus stay sharp. Low skips outlines, the wake, star glints and ocean detail; god rays are High only; the scenery density follows the preset
-- **Global leaderboard** on Vercel + Neon Postgres: live at <https://starlit-tides.vercel.app/api/scores>
-
-## Getting started
-
-1. Install Unity **6000.6.11f1** with Unity Hub. Add **Windows Build Support (Mono)** if you want to build the `.exe`.
-2. Unity Hub → **Add project from disk** → select the [`StarlitTides/`](StarlitTides/) folder.
-3. Open `Assets/_StarlitTides/Scenes/StarlitBay.unity` and press **▶ Play**.
-
-The scene is built by the **Starlit Tides** menu in the editor (steps 4–8, 10 and 11). **Starlit Tides → Rebuild Everything** runs them all and saves the scene. To make the game:
-- **Starlit Tides → 9. Build Windows (.exe)**, written to `StarlitTides/Builds/Windows/`
-- **Starlit Tides → Build macOS (.app)**, written to `StarlitTides/Builds/macOS/`
-
-Builds are not stored in git; make them from the project.
-
-## Repository layout
-
-| Folder | What's inside |
-|---|---|
-| [`StarlitTides/`](StarlitTides/) | **The Unity project**, with all phases applied |
-| [`Phase1/`](Phase1/Phase1_Setup.md) | Project setup guide + editor setup script (folders, packages, settings) |
-| [`Phase2/`](Phase2/Phase2_Environment.md) | Environment: shaders (ocean, sky, light beam), environment scripts, world builder |
-| [`Phase3/`](Phase3/Phase3_Gameplay.md) | Core gameplay: boat, light meter, orbs, obstacles, spawners, camera, gameplay builder |
-| [`Phase4/`](Phase4/Phase4_Features.md) | Extra features 1–6: light vision, combos, Starburst, weather, near misses, intro cinematic |
-| [`Phase5/`](Phase5/Phase5_Bonus.md) | Bonus features 7–11: whale, living village, Photo Mode, procedural audio, high scores |
-| [`Phase6/`](Phase6/Phase6_Polish.md) | UI, settings, quality presets, optimisation and the build tools |
-| [`Phase7/`](Phase7/Phase7_Visual_Upgrade.md) | Out to sea: turned the bay, made the image sharper, added sea-creature obstacles |
-| [`Phase8/`](Phase8/Phase8_Stylized_Overhaul.md) | Stylized overhaul: wider play area, stylized shader and outlines, smoother geometry, the sea field, ocean restyle + colour LUT, performance tiers, VFX polish |
-| [`Online/`](Online/) | Unity `LeaderboardClient.cs` that talks to the leaderboard API |
-| [`leaderboard-api/`](leaderboard-api/README.md) | Vercel serverless API (`/api/scores`) backed by Neon Postgres |
-| `starlit_tides.cpp`, `Makefile` | An earlier C++ / OpenGL (GLUT) prototype of the game |
-
-Each `PhaseN/` guide explains that phase: its scripts, shaders, editor steps and the graphics techniques behind it. Each `PhaseN/_StarlitTides/` folder mirrors `Assets/_StarlitTides/` as it was after that phase.
-
-## Requirements
-
-- Unity **6000.6.x** with URP, Input System, **Cinemachine 3.1.8**, Shader Graph, ProBuilder, Timeline, TextMeshPro (uGUI)
-- For your own leaderboard: a Vercel account and the Neon integration (free tiers are enough)
-
-## Controls
+### Controls
 
 | Action | Keyboard | Gamepad |
 |---|---|---|
-| Steer | WASD / arrow keys | left stick / d-pad |
-| Dash | Space | South button (A) |
+| Steer | WASD / arrow keys | Left stick / d-pad |
+| Speed up / slow down | W / S (up / down arrows) | Left stick |
+| Dash (left, right or forward) | Space | A / Cross |
 | Pause / back | Esc | Start |
-| Retry (after game over) | R | North button (Y) |
-| Photo Mode | P | Select |
-| Skip the intro | Space / Enter / Esc | South button (A) / Start |
+| Retry after game over | R | Y / Triangle |
+| Photo mode | P | Select |
+| Skip the intro | Space, Enter or Esc | A or Start |
 
-Menus work with the mouse, the keyboard (arrows + Enter) or a gamepad.
+The dash makes you briefly untouchable but needs 2.5 seconds to recharge. Menus work with the mouse, the keyboard or a gamepad.
+
+## The voyage
+
+| | |
+|---|---|
+| ![Lantern Bay](docs/Phase9/ReleaseCheck/tour_zone1_Lantern_Bay.jpg) **1. Lantern Bay** - leaving the harbour | ![Glow Reef](docs/Phase9/ReleaseCheck/tour_zone2_Glow_Reef.jpg) **2. Glow Reef** - jellyfish blooms drifting with the current |
+| ![Sunset Channel](docs/Phase9/ReleaseCheck/tour_zone3_Sunset_Channel.jpg) **3. Sunset Channel** - dolphin pods racing across | ![Orca Strait](docs/Phase9/ReleaseCheck/tour_zone4_Orca_Strait.jpg) **4. Orca Strait** - orcas hunting the boat |
+| ![Storm Reach](docs/Phase9/ReleaseCheck/tour_zone5_Storm_Reach.jpg) **5. Storm Reach** - humpbacks feeding under the storm | ![Aurora Deep](docs/Phase9/ReleaseCheck/tour_zone6_Aurora_Deep.jpg) **6. Aurora Deep** - everything at once, under the aurora |
+
+The first zone lasts 45 seconds, and each zone after it lasts 25% longer. The light drains faster, the orbs get sparser and the obstacles get denser as you go. After the last zone the voyage starts again, a little harder each time.
+
+The animals are modelled on real ones, at roughly real size, and behave like them. Sea turtles come up to breathe (bubbles warn you first), dolphins porpoise across the lane, orcas stalk at the edge of the lane and then charge, humpbacks lunge up through a ring of bubbles, and jellyfish drift in blooms.
+
+![Moon jellies and an orb](docs/Phase9/ReleaseCheck/jellyfish_vs_orb.jpg)
+*Moon jellies (left), a lion's mane jellyfish (back) and a light orb (right).*
+
+## What's in it
+
+**Graphics**
+- A hand-written ocean shader (HLSL): Gerstner waves, depth colour, refraction, Fresnel reflections, foam and bioluminescent plankton
+- A procedural night sky with stars, the Milky Way, the moon, aurora, storm clouds with lightning, and a sunset
+- A stylised "storybook" look: a custom toon shader with soft banded light, a moonlit rim and outlines, plus a colour-grading LUT built in code
+- Every model is generated in code: the village, lighthouse, rocks, boat, whale, dolphins, orcas, turtles, manta rays and jellyfish
+- A custom particle shader for the effects: sparkles, splashes, shockwave rings, mist and rain ripples
+- A boat wake built from the physics of a real ship wake (Kelvin angle, 19.47°)
+- Moon god rays, volumetric lighthouse beams, bloom, depth of field and a contrast-adaptive sharpening pass
+
+**Gameplay**
+- The light meter, orbs, obstacles and a camera with impulse shake
+- Combos, a golden shooting star that gives *Starburst*, near-miss slow motion, and weather that changes as you go
+- A glowing whale event, a living village with hidden orbs, a photo mode with filters, and procedural music and sound (no audio files)
+- Saved high scores and stats, plus a global leaderboard (Vercel + Neon Postgres)
+
+**Settings**
+- Volumes, fullscreen, display resolution, 3D resolution (FSR upscaling), anti-aliasing (SMAA / MSAA), shadows, reflections, colour depth, frame-rate cap, a battery saver, and an auto-detect button
+- Changes take effect when you press *Apply*
+
+## Opening the project
+
+1. Install Unity **6000.6.11f1** with Unity Hub. Add *Windows Build Support (Mono)* if you also want to build for Windows.
+2. In Unity Hub, choose *Add project from disk* and select the [`StarlitTides/`](StarlitTides/) folder.
+3. Open `Assets/_StarlitTides/Scenes/StarlitBay.unity` and press Play.
+
+The scene and its assets are generated by editor scripts. *Starlit Tides > Rebuild Everything* regenerates the whole scene. *Starlit Tides > 9. Build Windows (.exe)* and *Build macOS (.app)* make the builds in `StarlitTides/Builds/`.
+
+## Repository layout
+
+| Folder | Contents |
+|---|---|
+| [`StarlitTides/`](StarlitTides/) | The Unity project, with the Mac and Windows builds in `Builds/` |
+| [`docs/`](docs/) | Development notes for each stage of the project, with screenshots (see below) |
+| [`leaderboard-api/`](leaderboard-api/README.md) | The online leaderboard: a small serverless API on Vercel with a Postgres database |
+| [`opengl-prototype/`](opengl-prototype/) | The first version of the game in C++ with OpenGL/GLUT (build it with `make`) |
+
+The notes in `docs/` follow the order the game was built in:
+
+1. [Project setup](docs/Phase1/Phase1_Setup.md)
+2. [Environment](docs/Phase2/Phase2_Environment.md): ocean and sky shaders, the village and coast
+3. [Core gameplay](docs/Phase3/Phase3_Gameplay.md): boat, light meter, orbs, obstacles, camera
+4. [Features](docs/Phase4/Phase4_Features.md): combos, Starburst, weather, near misses, the intro cinematic
+5. [Bonus features](docs/Phase5/Phase5_Bonus.md): whale, living village, photo mode, procedural audio, high scores
+6. [UI and polish](docs/Phase6/Phase6_Polish.md): menus, settings, quality presets, build tools
+7. [Visual upgrade](docs/Phase7/Phase7_Visual_Upgrade.md): out to sea, a sharper image, sea creatures
+8. [Stylised overhaul](docs/Phase8/Phase8_Stylized_Overhaul.md): toon shader, outlines, the sea field, VFX, performance
+9. [The voyage](docs/Phase9/Phase9_Plan_Voyage.md): zones, real animal behaviour, difficulty, settings, the jellyfish redesign
 
 ## Credits
 
-- Fonts: **Cinzel** and **Quicksand**, SIL Open Font License 1.1 (see `StarlitTides/Assets/_StarlitTides/UI/Fonts/`)
-- All models, shaders, textures, music and sound effects are generated by the project's own code
+- Fonts: Cinzel and Quicksand, both under the SIL Open Font License 1.1 (see `StarlitTides/Assets/_StarlitTides/UI/Fonts/`)
+- All models, textures, shaders, music and sound effects are generated by the project's own code

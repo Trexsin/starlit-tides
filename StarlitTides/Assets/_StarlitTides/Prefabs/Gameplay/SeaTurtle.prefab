@@ -2415,7 +2415,6 @@ GameObject:
   - component: {fileID: 1918659921162132091}
   - component: {fileID: 1575265886624481866}
   - component: {fileID: 6244804454421851708}
-  - component: {fileID: 7746958629157007291}
   m_Layer: 0
   m_Name: SeaTurtle
   m_TagString: Untagged
@@ -2482,7 +2481,7 @@ MonoBehaviour:
   despawnX: 45
   followWaves: 0.8
   type: 3
-  lightDamage: 0.1
+  lightDamage: 0.15
   radius: 1.1
   visual: {fileID: 2510439730151951732}
   rollSpeed: 0
@@ -2500,30 +2499,6 @@ MonoBehaviour:
   glowLight: {fileID: 6998342366570464621}
   hitCollider: {fileID: 1575265886624481866}
   telegraph: {fileID: 8178673656529148887}
---- !u!114 &7746958629157007291
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4506344133637333601}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 75572a10d395c4e298c0ddf799fbe491, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.WaterDisturber
-  radius: 1.6
-  strength: 0.9
-  pulse: 0
-  pulseSpeed: 2
-  maxHeightAboveWater: 2.5
-  leaveTrail: 0
-  trailSpacing: 0.8
-  trailRadius: 1.2
-  trailStrength: 0.8
-  trailLife: 1.8
-  minTrailInterval: 0.07
-  strengthMultiplier: 1
 --- !u!1 &7328853540634799684
 GameObject:
   m_ObjectHideFlags: 0

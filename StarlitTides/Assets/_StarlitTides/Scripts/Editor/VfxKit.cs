@@ -594,6 +594,66 @@ namespace StarlitTides.EditorTools
             return b;
         }
 
+        // The boat's wake (BoatSplash emits into these by hand, per metre travelled):
+        // flat particles lying on the water that spread and fade as they drift back.
+        static ParticleSystem WakeLayer(string name, Transform parent, Material mat, float growTo)
+        {
+            var ps = Looping(name, parent, mat, ParticleSystemRenderMode.HorizontalBillboard);
+            var m = ps.main; m.simulationSpace = ParticleSystemSimulationSpace.World; m.maxParticles = 2500;
+            m.startSpeed = 0f; m.playOnAwake = true;
+            var e = ps.emission; e.rateOverTime = 0f;
+            SizeLife(ps, Curve(0f, 0.6f, 0.25f, 1f, 1f, growTo));
+            ColorLife(ps, Grad(new[] { White, White }, 0f, 0f, 0.08f, 1f, 0.55f, 0.6f, 1f, 0f));
+            ps.GetComponent<ParticleSystemRenderer>().sortingFudge = 20f;
+            return ps;
+        }
+
+        /// <summary>
+        /// A jellyfish's soft glow: ONE camera-facing particle that lives forever, drawn
+        /// with the StarlitVfx shader every other effect uses. (It replaces a flat halo
+        /// quad that players sometimes saw as a solid magenta square.)
+        /// </summary>
+        public static ParticleSystem JellyGlow(Transform parent, float size, Color hdrTint, float height)
+        {
+            Ensure();
+            var ps = Looping("Glow", parent, Mat("M_VfxJellyGlow_" + Mathf.RoundToInt(size * 10f), Glow, hdrTint, false, 1.6f, 0.3f, 0.6f));
+            var m = ps.main; m.simulationSpace = ParticleSystemSimulationSpace.Local; m.playOnAwake = true;
+            m.startLifetime = 100000f; m.startSpeed = 0f; m.startSize = size; m.maxParticles = 1;
+            var e = ps.emission; e.rateOverTime = 0f;
+            Burst(ps, 1);
+            Twinkle(ps, 0.25f);   // a gentle breathing
+            ps.transform.localPosition = new Vector3(0f, height, 0f);
+            return ps;
+        }
+
+        /// <summary>Spray thrown off the outside of hard turns (BoatSplash emits it by hand).</summary>
+        public static ParticleSystem TurnSpray(Transform parent)
+        {
+            Ensure();
+            var spray = Looping("Turn Spray", parent, Mat("M_VfxTurnSpray", Droplet, new Color(0.88f, 0.96f, 1f, 0.8f), true, 0f, 0.2f, 0.6f));
+            var sm = spray.main; sm.simulationSpace = ParticleSystemSimulationSpace.World; sm.gravityModifier = 1.5f;
+            sm.maxParticles = 600; sm.startSpeed = 0f; sm.playOnAwake = true;
+            var se = spray.emission; se.rateOverTime = 0f;
+            SizeLife(spray, Curve(0f, 1f, 1f, 0.4f));
+            ColorLife(spray, Grad(new[] { White, Cyan }, 0f, 1f, 0.7f, 0.8f, 1f, 0f));
+            return spray;
+        }
+
+        /// <summary>Foam, plankton glow and turn spray for the boat (an earlier particle version of the wake).</summary>
+        public static void BoatWake(Transform parent, out ParticleSystem foam, out ParticleSystem glow, out ParticleSystem spray)
+        {
+            Ensure();
+            // Tiny soft-fade distance: these lie exactly on the surface (like the rings).
+            foam = WakeLayer("Wake Foam", parent, Mat("M_VfxWakeFoam", Mist, new Color(0.92f, 0.98f, 1f, 1f), true, 0f, 0.01f, 0.6f), 3.2f);
+            glow = WakeLayer("Wake Glow", parent, Mat("M_VfxWakeGlow", Glow, new Color(0.45f, 2.0f, 2.5f), false, 1.4f, 0.01f, 0.6f), 2.6f);
+            spray = Looping("Turn Spray", parent, Mat("M_VfxTurnSpray", Droplet, new Color(0.88f, 0.96f, 1f, 0.8f), true, 0f, 0.2f, 0.6f));
+            var sm = spray.main; sm.simulationSpace = ParticleSystemSimulationSpace.World; sm.gravityModifier = 1.5f;
+            sm.maxParticles = 600; sm.startSpeed = 0f; sm.playOnAwake = true;
+            var se = spray.emission; se.rateOverTime = 0f;
+            SizeLife(spray, Curve(0f, 1f, 1f, 0.4f));
+            ColorLife(spray, Grad(new[] { White, Cyan }, 0f, 1f, 0.7f, 0.8f, 1f, 0f));
+        }
+
         // Glowing streaks low over the sea that rush past at the tide's speed:
         // the main thing that makes the speed visible. SpeedFx sets their speed.
         public static ParticleSystem WaterStreaks(Transform parent)

@@ -33,7 +33,9 @@ namespace StarlitTides
 
     public static class ProceduralAudio
     {
-        public const int SampleRate = 44100;
+        // 24 kHz (Phase 9 optimisation, was 44.1 kHz): every sound is filtered well below
+        // the 12 kHz this can carry, so it sounds the same at ~55% of the memory.
+        public const int SampleRate = 24000;
         const float TwoPi = 6.2831853f;
 
         // ------------------------------------------------------------------
@@ -174,8 +176,10 @@ namespace StarlitTides
         // tail of the end of a loop rings on into its start.
         static float[] ReverbLoop(float[] dry, float mix, float room, int spread)
         {
-            int[] combs = { 1557 + spread, 1617 + spread, 1491 + spread, 1422 + spread };
-            int[] alls = { 556 + spread, 441 + spread };
+            // (Freeverb's delays are given for 44.1 kHz: scale them to our sample rate.)
+            float rateScale = SampleRate / 44100f;
+            int[] combs = { (int)((1557 + spread) * rateScale), (int)((1617 + spread) * rateScale), (int)((1491 + spread) * rateScale), (int)((1422 + spread) * rateScale) };
+            int[] alls = { (int)((556 + spread) * rateScale), (int)((441 + spread) * rateScale) };
             float[][] cb = new float[4][]; int[] ci = new int[4]; float[] cf = new float[4];
             for (int k = 0; k < 4; k++) cb[k] = new float[combs[k] * 2];   // x2: a bigger room
             float[][] ab = new float[2][]; int[] ai = new int[2];
@@ -331,6 +335,207 @@ namespace StarlitTides
                 d[i] = (bp.Process(p) + bp2.Process(p) * 0.15f) * (0.35f + 0.65f * lv * lv);
             }
             return d;
+        }
+
+        // ------------------------------------------------------------------
+        // Water and sea life (Phase 9): soft, rounded, low; nothing sharp
+        // ------------------------------------------------------------------
+
+        // The boat moving through water: a gentle hull swish (pink noise through a
+        // slowly wandering band-pass), soft bubbles trickling along the hull, and a
+        // low lap of small waves. AudioManager raises volume and brightness with speed.
+        public static SoundData BoatWater(int seed)
+        {
+            const float seconds = 10f;
+            float[] l = BoatWaterChannel(seed, seconds, 0f), r = BoatWaterChannel(seed + 71, seconds, 1.3f);
+            NormalizePair(l, r, 0.6f);
+            return new SoundData(Interleave(MakeLoop(l, 1.5f), MakeLoop(r, 1.5f)), 2);
+        }
+
+        static float[] BoatWaterChannel(int seed, float seconds, float phase)
+        {
+            Random rng = new Random(seed);
+            float[] d = Buffer(seconds + 1.5f);
+            Pink pink = new Pink(rng);
+            Biquad swish = new Biquad(), lap = new Biquad().LowPass(240f, 0.7f);
+            Wander centre = new Wander(rng, 0.4f), level = new Wander(rng, 0.3f);
+            for (int i = 0; i < d.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                if (i % 64 == 0) swish.Set(280f + 260f * centre.Next(), 0.7f, 2);   // low and soft: a breath of water, not a hiss
+                float p = pink.Next();
+                // small waves slapping the hull every second or so
+                float slap = 0.6f + 0.4f * (float)Math.Sin(TwoPi * t * 0.8f + phase) * (float)Math.Sin(TwoPi * t * 0.31f + phase * 2f);
+                float lv = level.Next();
+                d[i] = swish.Process(p) * (0.55f + 0.45f * lv) * slap + lap.Process(p) * 0.8f * (0.7f + 0.3f * slap);
+            }
+            // bubbles: soft low sine chirps along the hull (like the rain drops, but lower and rounder)
+            int bubbles = (int)(seconds * 5f);   // just a few, now and then
+            for (int n = 0; n < bubbles; n++)
+            {
+                int start = rng.Next(d.Length);
+                float f0 = 320f + (float)rng.NextDouble() * 650f;
+                float amp = 0.004f + (float)rng.NextDouble() * 0.008f;
+                float life = 0.03f + (float)rng.NextDouble() * 0.04f;
+                int len = (int)(life * 4f * SampleRate);
+                float ph = 0f;
+                for (int i = 0; i < len; i++)
+                {
+                    float t = i / (float)SampleRate;
+                    ph += TwoPi * f0 * 0.7f * (1f + 0.3f * t / life) / SampleRate;
+                    d[(start + i) % d.Length] += (float)Math.Sin(ph) * amp * (float)Math.Exp(-t / life) * Math.Min(1f, t / 0.004f);
+                }
+            }
+            new Biquad().LowPass(1400f, 0.6f).Run(d);
+            new Biquad().LowPass(1400f, 0.6f).Run(d);   // twice: a gentle, steep roll-off of anything bright
+            new Biquad().HighPass(60f, 0.7f).Run(d);
+            return d;
+        }
+
+        // A splash: a soft burst of water (low-passed pink noise, rounded attack) with a
+        // bubbly tail and, for big ones, a deep "whoomp" underneath. Size 0..1.
+        public static float[] SoftSplash(int seed, float size)
+        {
+            Random rng = new Random(seed);
+            float seconds = 1.2f + size * 1.6f;
+            float[] d = Buffer(seconds);
+            Pink pink = new Pink(rng);
+            Biquad lp = new Biquad().LowPass(Lerp(1000f, 450f, size), 0.6f);
+            Biquad lp2 = new Biquad().LowPass(Lerp(1000f, 450f, size), 0.6f);
+            float decay = Lerp(3.2f, 1.6f, size);
+            for (int i = 0; i < d.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float env = Math.Min(1f, t / Lerp(0.04f, 0.08f, size)) * (float)Math.Exp(-t * decay);   // a rounded, soft onset
+                d[i] = lp2.Process(lp.Process(pink.Next())) * env * 1.6f;
+                // the deep whoomp of a big body hitting the water
+                d[i] += (float)Math.Sin(TwoPi * Lerp(90f, 48f, size) * t) * (float)Math.Exp(-t * 6f) * Math.Min(1f, t / 0.02f) * size * 0.7f;
+            }
+            int bubbles = (int)(4 + size * 12);
+            for (int n = 0; n < bubbles; n++)
+            {
+                float start = 0.05f + (float)rng.NextDouble() * seconds * 0.6f;
+                float f0 = Lerp(700f, 260f, size) + (float)rng.NextDouble() * 400f;
+                float amp = 0.015f * (float)Math.Exp(-start * 2f);
+                float life = 0.02f + (float)rng.NextDouble() * 0.04f;
+                int s0 = (int)(start * SampleRate), len = (int)(life * 4f * SampleRate);
+                float ph = 0f;
+                for (int i = 0; i < len && s0 + i < d.Length; i++)
+                {
+                    float t = i / (float)SampleRate;
+                    ph += TwoPi * f0 * (1f + 0.4f * t / life) / SampleRate;
+                    d[s0 + i] += (float)Math.Sin(ph) * amp * (float)Math.Exp(-t / life) * Math.Min(1f, t / 0.004f);
+                }
+            }
+            d = ReverbOneShot(d, 0.5f);   // more room: it blends into the night instead of popping out
+            return Normalize(d, Lerp(0.5f, 0.7f, size));
+        }
+
+        // A bubble net forming: soft bubbles rising, thickening over three seconds.
+        public static float[] BubbleNet(int seed)
+        {
+            Random rng = new Random(seed);
+            float[] d = Buffer(3.4f);
+            int bubbles = 260;
+            for (int n = 0; n < bubbles; n++)
+            {
+                // more bubbles later (the net thickens)
+                float u = (float)Math.Sqrt(rng.NextDouble());
+                float start = u * 2.9f;
+                float f0 = 240f + (float)rng.NextDouble() * 520f;
+                float amp = 0.02f + (float)rng.NextDouble() * 0.03f;
+                float life = 0.03f + (float)rng.NextDouble() * 0.05f;
+                int s0 = (int)(start * SampleRate), len = (int)(life * 4f * SampleRate);
+                float ph = 0f;
+                for (int i = 0; i < len && s0 + i < d.Length; i++)
+                {
+                    float t = i / (float)SampleRate;
+                    ph += TwoPi * f0 * (1f + 0.7f * t / life) / SampleRate;
+                    d[s0 + i] += (float)Math.Sin(ph) * amp * (float)Math.Exp(-t / life) * Math.Min(1f, t / 0.005f);
+                }
+            }
+            // a low murmur of moving water underneath
+            Pink pink = new Pink(rng);
+            Biquad lp = new Biquad().LowPass(300f, 0.7f);
+            for (int i = 0; i < d.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                d[i] += lp.Process(pink.Next()) * 0.6f * Math.Min(1f, t / 1.2f) * Math.Min(1f, (3.4f - t) / 0.4f);
+            }
+            new Biquad().LowPass(1100f, 0.6f).Run(d);
+            d = ReverbOneShot(d, 0.45f);
+            return Normalize(d, 0.5f);
+        }
+
+        // The orcas' wave sweeping past: a long, soft rush that swells and fades.
+        public static float[] WaveSweep(int seed)
+        {
+            Random rng = new Random(seed);
+            float[] d = Buffer(3f);
+            Pink pink = new Pink(rng);
+            Biquad bp = new Biquad();
+            for (int i = 0; i < d.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float swell = (float)Math.Sin(Math.PI * Math.Min(1f, t / 3f));
+                if (i % 64 == 0) bp.Set(300f + 900f * swell, 0.7f, 0);
+                d[i] = bp.Process(pink.Next()) * swell * swell;
+            }
+            return Normalize(d, 0.6f);
+        }
+
+        // A soft whistle: a gliding sine with gentle vibrato (dolphins high, orcas lower).
+        public static float[] Whistle(int seed, float baseHz, int count)
+        {
+            Random rng = new Random(seed);
+            float[] d = Buffer(0.5f + count * 0.45f);
+            for (int w = 0; w < count; w++)
+            {
+                float start = w * 0.4f + (float)rng.NextDouble() * 0.1f;
+                float len = 0.25f + (float)rng.NextDouble() * 0.2f;
+                float f0 = baseHz * (0.85f + (float)rng.NextDouble() * 0.3f), f1 = f0 * (1.1f + (float)rng.NextDouble() * 0.4f);
+                int s0 = (int)(start * SampleRate), n = (int)(len * SampleRate);
+                float ph = 0f;
+                for (int i = 0; i < n && s0 + i < d.Length; i++)
+                {
+                    float t = i / (float)n;
+                    float f = Lerp(f0, f1, (float)Math.Sin(t * Math.PI * 0.5)) + (float)Math.Sin(TwoPi * 7f * t * len) * f0 * 0.015f;
+                    ph += TwoPi * f / SampleRate;
+                    float env = (float)Math.Sin(Math.PI * t);
+                    d[s0 + i] += ((float)Math.Sin(ph) + 0.15f * (float)Math.Sin(2f * ph)) * env * env * 0.5f;
+                }
+            }
+            d = ReverbOneShot(d, 0.45f);
+            new Biquad().LowPass(3500f, 0.7f).Run(d);
+            return Normalize(d, 0.45f);
+        }
+
+        // A turtle coming up for air: a soft breathy puff.
+        public static float[] Breath(int seed)
+        {
+            Random rng = new Random(seed);
+            float[] d = Buffer(0.9f);
+            Pink pink = new Pink(rng);
+            Biquad bp = new Biquad().BandPass(650f, 1.2f);
+            for (int i = 0; i < d.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float env = Math.Min(1f, t / 0.06f) * (float)Math.Exp(-t * 4.5f);
+                d[i] = bp.Process(pink.Next()) * env;
+            }
+            return Normalize(d, 0.45f);
+        }
+
+        static float Lerp(float a, float b, float t) { return a + (b - a) * Math.Max(0f, Math.Min(1f, t)); }
+
+        // Reverb for a one-off sound (no wrap-around: the tail is added after it).
+        static float[] ReverbOneShot(float[] dry, float mix)
+        {
+            float[] padded = new float[dry.Length + (int)(1.2f * SampleRate)];
+            Array.Copy(dry, padded, dry.Length);
+            float[] wet = ReverbLoop(padded, mix, 0.8f, 0);
+            // (ReverbLoop runs twice over the buffer; with the silent padding the wrap is inaudible)
+            return wet;
         }
 
         // ------------------------------------------------------------------
@@ -606,6 +811,26 @@ namespace StarlitTides
             }
             new Biquad().LowPass(1400f, 0.7f).Run(d);
             return Normalize(d, 0.8f);
+        }
+
+        // A soft whale song for the sea creatures: a slow, low, smooth glide up and down
+        // with a gentle (not wobbly) vibrato, a soft overtone and a long reverb tail.
+        public static float[] WhaleSongSoft()
+        {
+            float[] d = Buffer(4.5f);
+            float phase = 0f;
+            for (int i = 0; i < d.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float glide = 118f + 22f * (float)Math.Sin(Math.PI * Math.Min(1f, t / 3.2f)) - 10f * Math.Min(1f, t / 3.2f);
+                float vibrato = 1.2f * (float)Math.Sin(TwoPi * 2.2f * t);
+                phase += TwoPi * (glide + vibrato) / SampleRate;
+                float env = (float)Math.Pow(Math.Sin(Math.PI * Math.Min(1f, t / 3.3f)), 1.5);
+                d[i] = ((float)Math.Sin(phase) + 0.22f * (float)Math.Sin(2f * phase)) * env;
+            }
+            new Biquad().LowPass(700f, 0.6f).Run(d);
+            d = ReverbOneShot(d, 0.55f);
+            return Normalize(d, 0.6f);
         }
 
         // Big splash: a burst of filtered pink noise that dies away.

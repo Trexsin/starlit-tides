@@ -47,7 +47,10 @@ namespace StarlitTides
         public float Kick { get; private set; }
         float kickTarget;
         /// <summary>Degrees added to the gameplay camera's FOV.</summary>
-        public float FovBoost { get { return Speed01 * maxFovBoost + Kick * kickFov; } }
+        public float FovBoost { get { return Speed01 * maxFovBoost + Kick * kickFov + Mathf.Max(0f, throttle) * throttleFov; } }
+        [Tooltip("Extra FOV while holding forward (degrees).")]
+        public float throttleFov = 4f;
+        float throttle;
         /// <summary>Metres of camera shake right now.</summary>
         public float Shake { get { return (Mathf.Max(0f, Speed01 - 0.35f) / 0.65f) * maxShake + Kick * 0.015f; } }
 
@@ -73,7 +76,12 @@ namespace StarlitTides
             VoyageDirector.OnZoneStarted -= HandleZone;
         }
 
-        void HandleDash() { AddKick(0.8f); }
+        // Dashing: a strong field-of-view punch, a burst of speed lines and a lens pulse.
+        void HandleDash()
+        {
+            AddKick(1.2f);
+            if (airLines != null) airLines.Emit(45);
+        }
 
         void HandleZone(VoyageDirector.Zone zone, int voyage)
         {
@@ -90,13 +98,15 @@ namespace StarlitTides
             GameManager game = GameManager.Instance;
             bool playing = game != null && game.IsPlaying;
             float tide = OceanController.Instance != null ? OceanController.Instance.tideSpeed : slowTide;
+            // (tide includes the player's throttle and dash surge, so holding forward widens the view too)
             float target = playing ? Mathf.Clamp01((tide - slowTide) / Mathf.Max(1f, fastTide - slowTide)) : 0f;
-            Speed01 = Mathf.MoveTowards(Speed01, target, dt * 0.5f);
+            Speed01 = Mathf.MoveTowards(Speed01, target, dt * 1.2f);   // quick enough to follow the throttle
             // The target fades out; the kick follows it smoothly (in over ~0.2 s, out over ~1 s).
             kickTarget = Mathf.MoveTowards(kickTarget, 0f, dt * 0.9f);
             Kick = Mathf.Lerp(Kick, kickTarget, 1f - Mathf.Exp(-(kickTarget > Kick ? 10f : 4f) * dt));
 
             bool dashing = BoatController.Instance != null && BoatController.Instance.IsDashing;
+            throttle = playing && BoatController.Instance != null ? BoatController.Instance.Throttle : 0f;
             float speedNow = playing ? tide : tide * 0.6f;
 
             if (waterStreaks != null)
@@ -117,7 +127,8 @@ namespace StarlitTides
 
             if (airLines != null)
             {
-                float lines = Mathf.Clamp01((Speed01 - 0.4f) / 0.6f) * airLineRate + (dashing ? airLineRate * 1.4f : 0f);
+                float lines = Mathf.Clamp01((Speed01 - 0.4f) / 0.6f) * airLineRate + (dashing ? airLineRate * 1.4f : 0f)
+                            + Mathf.Max(0f, throttle) * airLineRate * 0.5f;   // speed lines while holding forward
                 ParticleSystem.EmissionModule e = airLines.emission;
                 e.rateOverTime = playing ? lines : 0f;
             }

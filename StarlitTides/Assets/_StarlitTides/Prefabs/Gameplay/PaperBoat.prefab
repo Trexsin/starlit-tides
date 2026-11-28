@@ -190,8 +190,8 @@ MonoBehaviour:
   edgeBumpSpeed: 6
   dashSpeed: 27
   dashDuration: 0.18
-  dashCooldown: 1.1
-  dashInvulnerability: 0.3
+  dashCooldown: 2.5
+  dashInvulnerability: 0.2
   hitInvulnerability: 1
   blinkRenderers:
   - {fileID: 6133864405028335851}

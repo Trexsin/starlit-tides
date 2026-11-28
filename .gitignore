@@ -1,9 +1,11 @@
-# macOS
+# OS files
 .DS_Store
+Thumbs.db
+desktop.ini
 
-# compiled C++/OpenGL version (rebuild with `make`)
-/starlit_tides
-/starlit_tides.exe
+# compiled C++/OpenGL prototype (rebuild with `make` in opengl-prototype/)
+/opengl-prototype/starlit_tides
+/opengl-prototype/starlit_tides.exe
 *.o
 
 # Node / Vercel (leaderboard-api)

@@ -133,9 +133,10 @@ namespace StarlitTides
         float CurrentDensity()
         {
             SettingsManager s = SettingsManager.Instance;
-            if (s == null) return densityLowHigh.y;
+            float battery = PowerManager.OnBattery ? 0.7f : 1f;   // sparser scenery in the battery saver
+            if (s == null) return densityLowHigh.y * battery;
             int maxLevel = Mathf.Max(1, QualitySettings.names.Length - 1);
-            return Mathf.Lerp(densityLowHigh.x, densityLowHigh.y, s.QualityLevel / (float)maxLevel);
+            return Mathf.Lerp(densityLowHigh.x, densityLowHigh.y, s.QualityLevel / (float)maxLevel) * battery;
         }
 
         float Spacing(Band b) { return b.spacing / Mathf.Max(density, 0.1f); }

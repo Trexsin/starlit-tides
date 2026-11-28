@@ -101,7 +101,7 @@ Shader "Hidden/StarlitTides/Atmosphere"
                             float d = SampleSceneDepth(suv);
                             if (IsSky(d))
                             {
-                                float l = Luminance(SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, suv).rgb);
+                                float l = Luminance(SAMPLE_TEXTURE2D_X_LOD(_BlitTexture, sampler_LinearClamp, suv, 0).rgb);   // explicit mip: no screen-space derivatives inside the loop (undefined on DirectX)
                                 light += max(l - _AtmoRayParams.y, 0.0) * decay;
                             }
                             decay *= _AtmoRayParams.z;

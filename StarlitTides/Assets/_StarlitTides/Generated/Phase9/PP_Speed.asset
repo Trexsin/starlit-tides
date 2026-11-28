@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: PP_Speed
   m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.VolumeProfile
   components:
-  - {fileID: 5577959976934873057}
-  - {fileID: 1181792418556876782}
---- !u!114 &1181792418556876782
+  - {fileID: 8363430428211794965}
+  - {fileID: 4354535161725216905}
+--- !u!114 &4354535161725216905
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}
@@ -43,7 +43,7 @@ MonoBehaviour:
   scale:
     m_OverrideState: 1
     m_Value: 1
---- !u!114 &5577959976934873057
+--- !u!114 &8363430428211794965
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}

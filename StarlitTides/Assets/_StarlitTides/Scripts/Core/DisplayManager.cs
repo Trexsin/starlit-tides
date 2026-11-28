@@ -1,21 +1,22 @@
 // DisplayManager: screen mode, resolution and the first-launch auto-detect.
 //
-// Resolution (Phase 9: a real list you pick from a dropdown):
-//   The Settings dropdown lists real sizes: the display's native size first, then
-//   common widths (2560, 1920, 1600, 1280...) at the display's own shape, so the
-//   picture is never stretched.
-//   - Fullscreen: the screen keeps running at its native size, so text and the HUD
-//     stay razor sharp, and the 3D world is rendered at the chosen size (URP render
-//     scale = chosen width / screen width), upscaled with AMD FSR 1.
-//   - Windowed: the window itself takes the chosen size.
+// Two resolutions, both the player's choice (Phase 9):
+//   DISPLAY RESOLUTION: the size of the whole picture (menus, HUD and 3D). The list
+//     is the display's native size (the sharpest) and common widths below it
+//     (2560, 1920, 1600...) at the display's own shape, so it's never stretched.
+//     The default is native: anything smaller is stretched by the OS and looks soft
+//     (players asked for a sharp picture). Smaller sizes run cooler; in a window,
+//     the window takes this size.
+//   3D RESOLUTION: the 3D world is drawn at 100% .. 50% of the display resolution
+//     and upscaled with AMD FSR 1 (the menus stay sharp).
 //
 // The first launch (and the AUTO-DETECT button) measures the frame rate and picks
-// the biggest resolution that holds ~60 fps:
-//   1. fullscreen at the display's native size,
+// the biggest 3D resolution that holds ~60 fps:
+//   1. fullscreen, 100%, the highest quality,
 //   2. measure the real frame rate for a few seconds,
-//   3. too slow? pick the size that should reach the target (frame time is roughly
-//      proportional to the number of pixels), measure again, and if even ~60% of the
-//      native width isn't enough, drop the quality level one step,
+//   3. too slow? pick the percentage that should reach the target (frame time is
+//      roughly proportional to the number of pixels), measure again, and if even
+//      ~70% isn't enough, drop the quality level one step,
 //   4. save the result.
 
 using System.Collections;
@@ -34,20 +35,35 @@ namespace StarlitTides
         /// <summary>Common widths offered under the native size (at the display's own shape).</summary>
         static readonly int[] CommonWidths = { 3840, 3200, 2880, 2560, 2304, 2048, 1920, 1680, 1600, 1440, 1280, 1024 };
 
-        const string WidthKey = "ST_ResolutionWidth";          // the chosen width (0 = native)
-        const string OldScaleKey = "ST_RenderScaleIndex";       // Phase 8 step 9 (percent steps)
-        const string DetectedKey = "ST_DisplayAutoDetected";   // bump the value to re-run auto-detect for everyone
-        const int DetectVersion = 7;   // 7: shaders ~30% cheaper, pick again; 6: rejects readings from a hidden window; 5: steadier auto-detect that starts from High; 4: the real below-the-notch fullscreen size (3: resolutions became a real list)
+        /// <summary>The 3D resolution choices, as a fraction of the display resolution.</summary>
+        public static readonly float[] RenderFractions = { 1f, 0.9f, 0.8f, 0.7f, 0.6f, 0.5f };
 
-        /// <summary>The sizes in the dropdown, biggest (native) first.</summary>
-        public List<Vector2Int> Options { get; private set; }
-        public int ScaleIndex { get; private set; }
+        const string DisplayKey = "ST_DisplayWidth";            // the chosen display width (0 = native)
+        const string RenderKey = "ST_RenderPercentIndex";       // index into RenderFractions
+        const string DetectedKey = "ST_DisplayAutoDetected";   // bump the value to re-run auto-detect for everyone
+        const int DetectVersion = 9;   // 9: display and 3D resolution became two settings; 8: output capped at 1920 px (cooler, less memory); 7: shaders ~30% cheaper, pick again; 6: rejects readings from a hidden window; 5: steadier auto-detect that starts from High; 4: the real below-the-notch fullscreen size (3: resolutions became a real list)
+
+        /// <summary>The display resolutions in the dropdown, biggest (native) first.</summary>
+        public List<Vector2Int> DisplayOptions { get; private set; }
+        public int DisplayIndex { get; private set; }
+        /// <summary>Index into RenderFractions (0 = 100%).</summary>
+        public int RenderIndex { get; private set; }
         public bool Detecting { get; private set; }
         /// <summary>A short line for the Settings screen ("Auto-picked ...", "Testing ...").</summary>
         public string Status { get; private set; }
-        /// <summary>The chosen size as a fraction of the native width (1 = native).</summary>
-        public float RenderScale { get { return Fraction(ScaleIndex); } }
-        public Vector2Int Chosen { get { return Options[Mathf.Clamp(ScaleIndex, 0, Options.Count - 1)]; } }
+        /// <summary>The 3D resolution as a fraction of the display resolution (1 = 100%).</summary>
+        public float RenderScale { get { return Fraction(RenderIndex); } }
+        /// <summary>The chosen display resolution (before the battery saver's cap).</summary>
+        public Vector2Int ChosenDisplay { get { return DisplayOptions[Mathf.Clamp(DisplayIndex, 0, DisplayOptions.Count - 1)]; } }
+        /// <summary>The size the 3D world is drawn at.</summary>
+        public Vector2Int Chosen
+        {
+            get
+            {
+                Vector2Int o = OutputSize();
+                return new Vector2Int(Mathf.RoundToInt(o.x * RenderScale), Mathf.RoundToInt(o.y * RenderScale));
+            }
+        }
 
         /// <summary>Raised whenever the resolution, mode or status text changes.</summary>
         public event System.Action Changed;
@@ -59,19 +75,26 @@ namespace StarlitTides
         int lastWidth, lastHeight;
         Coroutine detectRoutine;
 
+        [Tooltip("Default display width (px) when the player hasn't chosen one. 0 = the display's native size (the sharpest).")]
+        public int defaultDisplayWidth = 0;
+
         void Awake()
         {
             Instance = this;
             BuildOptions();
-            int width = PlayerPrefs.GetInt(WidthKey, 0);
-            if (!PlayerPrefs.HasKey(WidthKey) && PlayerPrefs.HasKey(OldScaleKey))
-            {
-                // Carry over the Phase 8 percentage setting.
-                float[] oldScales = { 1f, 0.9f, 0.8f, 0.7f, 0.6f, 0.5f };
-                width = Mathf.RoundToInt(NativeSize().x * oldScales[Mathf.Clamp(PlayerPrefs.GetInt(OldScaleKey, 0), 0, 5)]);
-            }
-            ScaleIndex = width <= 0 ? 0 : NearestIndex(width);
+            // (The Phase 9 single-resolution keys are replaced; auto-detect runs again, DetectVersion 9.)
+            PlayerPrefs.DeleteKey("ST_ResolutionWidth");
+            PlayerPrefs.DeleteKey("ST_RenderScaleIndex");
+            int width = PlayerPrefs.GetInt(DisplayKey, -1);
+            DisplayIndex = width < 0 ? DefaultDisplayIndex() : width == 0 ? 0 : NearestIndex(width);
+            RenderIndex = Mathf.Clamp(PlayerPrefs.GetInt(RenderKey, 0), 0, RenderFractions.Length - 1);
             Status = "";
+        }
+
+        int DefaultDisplayIndex()
+        {
+            if (defaultDisplayWidth <= 0 || DisplayOptions[0].x <= defaultDisplayWidth) return 0;
+            return NearestIndex(defaultDisplayWidth);
         }
 
         void Start()
@@ -110,9 +133,12 @@ namespace StarlitTides
                 lastWidth = Screen.width;
                 lastHeight = Screen.height;
                 // (The native size is known for sure only once the screen switch is done.)
-                Vector2Int keep = Chosen;
+                bool native = DisplayIndex == 0;
+                Vector2Int keep = ChosenDisplay;
                 BuildOptions();
-                ScaleIndex = NearestIndex(keep.x);
+                // Nothing chosen yet: the default, worked out again now the real screen size is known.
+                if (!PlayerPrefs.HasKey(DisplayKey)) DisplayIndex = DefaultDisplayIndex();
+                else DisplayIndex = native ? 0 : NearestIndex(keep.x);
                 ApplyRenderScale();
             }
         }
@@ -125,19 +151,41 @@ namespace StarlitTides
         /// </summary>
         void GoFullscreenNative()
         {
-            Vector2Int native = NativeSize();
-            bool wrongSize = Screen.width < native.x * 0.97f;   // compare widths: a notch can trim the height
+            Vector2Int output = OutputSize();
+            bool wrongSize = Mathf.Abs(Screen.width - output.x) > output.x * 0.03f;   // compare widths: a notch can trim the height
             if (Screen.fullScreenMode != FullScreenMode.FullScreenWindow || wrongSize)
-                Screen.SetResolution(native.x, native.y, FullScreenMode.FullScreenWindow);
+                Screen.SetResolution(output.x, output.y, FullScreenMode.FullScreenWindow);
+        }
+
+        /// <summary>Re-applies the fullscreen output size (the battery saver switching on or off).</summary>
+        public void RefreshOutput()
+        {
+            if (Application.isEditor || Screen.fullScreenMode == FullScreenMode.Windowed) return;
+            GoFullscreenNative();
+        }
+
+        /// <summary>
+        /// The size the game draws its whole picture at: the chosen display resolution.
+        /// (Nothing else ever lowers it: the battery saver used to cap it at 1440 px,
+        /// which made the picture blurry while Settings still showed the player's choice.)
+        /// (Measured on a MacBook Air: the panel's full 2940 x 1846 runs post-processing
+        /// and menus at 5.4 megapixels a frame, so 1920 px is much cooler. That trade is
+        /// the player's: the default is native, the 3D resolution keeps 60 fps.)
+        /// </summary>
+        public static Vector2Int OutputSize()
+        {
+            Vector2Int native = NativeSize();
+            if (Instance == null || Instance.DisplayOptions == null) return native;
+            return Instance.ChosenDisplay;
         }
 
         /// <summary>Fullscreen at native size, or a window at the chosen resolution.</summary>
         public void SetFullscreen(bool fullscreen)
         {
             if (Application.isEditor) return;
-            Vector2Int native = NativeSize();
+            Vector2Int output = OutputSize();
             if (fullscreen)
-                Screen.SetResolution(native.x, native.y, FullScreenMode.FullScreenWindow);
+                Screen.SetResolution(output.x, output.y, FullScreenMode.FullScreenWindow);
             else
                 ApplyWindowSize();
         }
@@ -174,85 +222,96 @@ namespace StarlitTides
         {
             Vector2Int native = NativeSize();
             float aspect = native.y / (float)Mathf.Max(1, native.x);
-            Options = new List<Vector2Int> { native };
+            DisplayOptions = new List<Vector2Int> { native };
             foreach (int w in CommonWidths)
             {
                 if (w >= native.x * 0.97f || w < native.x * 0.34f) continue;
                 int h = Mathf.RoundToInt(w * aspect / 2f) * 2;
-                Options.Add(new Vector2Int(w, h));
+                DisplayOptions.Add(new Vector2Int(w, h));
             }
         }
 
         int NearestIndex(int width)
         {
             int best = 0;
-            for (int i = 1; i < Options.Count; i++)
-                if (Mathf.Abs(Options[i].x - width) < Mathf.Abs(Options[best].x - width)) best = i;
+            for (int i = 1; i < DisplayOptions.Count; i++)
+                if (Mathf.Abs(DisplayOptions[i].x - width) < Mathf.Abs(DisplayOptions[best].x - width)) best = i;
             return best;
         }
 
-        float Fraction(int index)
+        static float Fraction(int index)
         {
-            Vector2Int native = Options[0];
-            return Mathf.Clamp(Options[Mathf.Clamp(index, 0, Options.Count - 1)].x / (float)Mathf.Max(1, native.x), 0.25f, 1f);
+            return RenderFractions[Mathf.Clamp(index, 0, RenderFractions.Length - 1)];
         }
 
-        /// <summary>Picks a resolution from the dropdown (0 = native).</summary>
-        public void SetResolution(int index)
+        /// <summary>Picks the display resolution (0 = native, the sharpest).</summary>
+        public void SetDisplayResolution(int index)
         {
-            SetScaleIndex(Mathf.Clamp(index, 0, Options.Count - 1));
+            DisplayIndex = Mathf.Clamp(index, 0, DisplayOptions.Count - 1);
+            PlayerPrefs.SetInt(DisplayKey, DisplayIndex == 0 ? 0 : DisplayOptions[DisplayIndex].x);
+            PlayerPrefs.Save();
             if (!Detecting) Status = "";
-            // Windowed: the window itself takes the chosen size.
-            if (!Application.isEditor && Screen.fullScreenMode == FullScreenMode.Windowed) ApplyWindowSize();
+            if (!Application.isEditor)
+            {
+                if (Screen.fullScreenMode == FullScreenMode.Windowed) ApplyWindowSize();
+                else GoFullscreenNative();
+            }
+            ApplyRenderScale();
+        }
+
+        /// <summary>Picks the 3D resolution (0 = 100% of the display resolution).</summary>
+        public void SetRenderResolution(int index)
+        {
+            SetRenderIndex(Mathf.Clamp(index, 0, RenderFractions.Length - 1));
+            if (!Detecting) Status = "";
             if (Changed != null) Changed();
         }
 
-        /// <summary>Moves one resolution step up (+1 = bigger) or down (-1).</summary>
-        public void StepResolution(int direction)
+        void SetRenderIndex(int index)
         {
-            SetResolution(Mathf.Clamp(ScaleIndex - direction, 0, Options.Count - 1));
-        }
-
-        void SetScaleIndex(int index)
-        {
-            ScaleIndex = index;
-            PlayerPrefs.SetInt(WidthKey, index == 0 ? 0 : Options[index].x);
+            RenderIndex = index;
+            PlayerPrefs.SetInt(RenderKey, index);
             PlayerPrefs.Save();
             ApplyRenderScale();
         }
 
         void ApplyWindowSize()
         {
-            Vector2Int size = Chosen;
+            Vector2Int size = ChosenDisplay;
             Vector2Int native = NativeSize();
             // A window as big as the screen doesn't fit with its title bar: use 85%.
             if (size.x > native.x * 0.9f) size = new Vector2Int(Mathf.RoundToInt(native.x * 0.85f), Mathf.RoundToInt(native.y * 0.85f));
             Screen.SetResolution(size.x, size.y, FullScreenMode.Windowed);
         }
 
-        /// <summary>The label for one dropdown entry.</summary>
-        public string OptionLabel(int index)
+        /// <summary>The label for one display resolution entry.</summary>
+        public string DisplayOptionLabel(int index)
         {
-            Vector2Int o = Options[Mathf.Clamp(index, 0, Options.Count - 1)];
-            return o.x + " x " + o.y + (index == 0 ? "  (native)" : "");
+            Vector2Int o = DisplayOptions[Mathf.Clamp(index, 0, DisplayOptions.Count - 1)];
+            string note = index == 0 ? "  (native)" : index == DefaultDisplayIndex() ? "  (default)" : "";
+            return o.x + " x " + o.y + note;
         }
 
-        /// <summary>"1920 x 1248" for the Settings screen.</summary>
+        /// <summary>The label for one 3D resolution entry ("80%").</summary>
+        public static string RenderOptionLabel(int index)
+        {
+            return Mathf.RoundToInt(Fraction(index) * 100f) + "%" + (index == 0 ? "  (full)" : "");
+        }
+
+        /// <summary>"1920 x 1248" (the size the 3D is drawn at).</summary>
         public string ResolutionLabel()
         {
             Vector2Int size = Chosen;
             return size.x + " x " + size.y;
         }
 
-        /// <summary>The small line under the resolution: what it means, or the auto-detect result.</summary>
+        /// <summary>The small line under the resolutions: what they mean, or the auto-detect result.</summary>
         public string DetailLabel()
         {
             if (!string.IsNullOrEmpty(Status)) return Status;
-            bool windowed = Screen.fullScreenMode == FullScreenMode.Windowed;
-            if (windowed) return "Windowed: the window is " + Screen.width + " x " + Screen.height;
-            return ScaleIndex == 0
-                ? "Native: every pixel of your " + Options[0].x + " x " + Options[0].y + " screen"
-                : "3D rendered at " + ResolutionLabel() + ", upscaled with AMD FSR (menus stay sharp)";
+            string battery = PowerManager.OnBattery ? "   \u2022   Battery saver on: 30 fps" : "";
+            if (RenderIndex == 0) return "3D drawn at the full " + ResolutionLabel() + battery;
+            return "3D drawn at " + ResolutionLabel() + ", upscaled with AMD FSR (menus stay sharp)" + battery;
         }
 
         /// <summary>
@@ -269,9 +328,11 @@ namespace StarlitTides
                 originalScales[asset] = asset.renderScale;
                 originalFilters[asset] = asset.upscalingFilter;
             }
-            // Fullscreen renders the 3D at the chosen width; a window already has that size.
-            bool windowed = !Application.isEditor && Screen.fullScreenMode == FullScreenMode.Windowed;
-            float scale = windowed ? 1f : Mathf.Clamp(Chosen.x / (float)Mathf.Max(1, Screen.width), 0.25f, 1f);
+            // Fullscreen: the 3D at the chosen percentage of the display resolution (the
+            // screen buffer may be bigger, e.g. a Mac keeps it at the panel size).
+            // A window already has the display resolution's size.
+            bool windowed = Application.isEditor || Screen.fullScreenMode == FullScreenMode.Windowed;
+            float scale = windowed ? RenderScale : Mathf.Clamp(Chosen.x / (float)Mathf.Max(1, Screen.width), 0.25f, 1f);
             asset.renderScale = scale;
             // FSR 1 when upscaling: edge-adaptive upscale + sharpening (cheap, works on Metal).
             asset.upscalingFilter = scale < 0.999f ? UpscalingFilterSelection.FSR : UpscalingFilterSelection.Auto;
@@ -321,17 +382,20 @@ namespace StarlitTides
             Detecting = true;
             SettingsManager settings = SettingsManager.Instance;
             int startQuality = settings != null ? settings.QualityLevel : 0;
-            int startScale = ScaleIndex;
+            int startShadows = settings != null ? settings.Shadows : 0;
+            int startReflections = settings != null ? settings.Reflections : 0;
+            int startScale = RenderIndex;
             invalidReading = false;
 
-            // Start from the best: fullscreen, native, the highest quality.
+            // Start from the best: fullscreen, 100% 3D resolution, the highest quality
+            // (at the player's display resolution).
             if (!Application.isEditor)
             {
                 if (settings != null && !settings.Fullscreen) settings.SetFullscreen(true);
                 else SetFullscreen(true);
             }
             if (settings != null) while (settings.QualityLevel < QualitySettings.names.Length - 1) settings.StepQuality(1);
-            SetScaleIndex(0);
+            SetRenderIndex(0);
 
             // The goal is a steady 60 fps (or the display's rate if lower), with ~12%
             // headroom: gameplay gets busier than the menu this is measured in.
@@ -339,14 +403,14 @@ namespace StarlitTides
             int savedTarget = Application.targetFrameRate;
             float target = Mathf.Min(60f, RefreshRate()) * 1.12f;
             int softest = 0;   // the smallest size we accept before lowering the quality
-            while (softest < Options.Count - 1 && Fraction(softest + 1) >= 0.68f) softest++;
+            while (softest < RenderFractions.Length - 1 && Fraction(softest + 1) >= 0.68f) softest++;
             float fps = 0f;
             bool done = false;
 
             for (int guard = 0; guard < 8 && !done; guard++)
             {
-                // 1. how fast is this quality at the native size?
-                SetScaleIndex(0);
+                // 1. how fast is this quality at 100%?
+                SetRenderIndex(0);
                 yield return MeasureSettled(target, result => fps = result);
                 if (invalidReading) break;
                 if (fps >= target) break;
@@ -355,10 +419,10 @@ namespace StarlitTides
                 //    size should reach the target; verify it, and one size lower if needed
                 float wanted = Mathf.Sqrt(fps / target);
                 int pick = 0;
-                while (pick < Options.Count - 1 && Fraction(pick) > wanted + 0.001f) pick++;
+                while (pick < RenderFractions.Length - 1 && Fraction(pick) > wanted + 0.001f) pick++;
                 for (int tries = 0; tries < 2 && pick <= softest; tries++, pick++)
                 {
-                    SetScaleIndex(pick);
+                    SetRenderIndex(pick);
                     yield return MeasureSettled(target, result => fps = result);
                     if (invalidReading) break;
                     if (fps >= target * 0.97f) { done = true; break; }
@@ -369,9 +433,9 @@ namespace StarlitTides
                 if (settings != null && settings.QualityLevel > 0) { settings.StepQuality(-1); continue; }
 
                 // Lowest quality already: accept a softer picture.
-                for (int i = softest + 1; i < Options.Count; i++)
+                for (int i = softest + 1; i < RenderFractions.Length; i++)
                 {
-                    SetScaleIndex(i);
+                    SetRenderIndex(i);
                     yield return MeasureSettled(target, result => fps = result);
                     if (invalidReading || fps >= target * 0.97f) break;
                 }
@@ -385,19 +449,26 @@ namespace StarlitTides
                 // The window wasn't on screen (hidden behind another app, another Space,
                 // or the display asleep): macOS then skips drawing and the frame rate
                 // reads in the thousands. Keep the old settings and try again next launch.
-                if (settings != null) while (settings.QualityLevel != startQuality) settings.StepQuality(settings.QualityLevel < startQuality ? 1 : -1);
-                SetScaleIndex(startScale);
+                if (settings != null)
+                {
+                    while (settings.QualityLevel != startQuality) settings.StepQuality(settings.QualityLevel < startQuality ? 1 : -1);
+                    settings.SetShadows(startShadows);
+                    settings.SetReflections(startReflections);
+                }
+                SetRenderIndex(startScale);
                 Detecting = false;
                 detectRoutine = null;
                 Debug.Log("[Starlit Tides] Auto-detect: the window wasn't visible, nothing measured. It will try again next launch.");
-                SetStatus("Couldn't measure (the game window wasn't visible). Press Auto-detect to try again.");
+                PowerManager.Reapply();
+            SetStatus("Couldn't measure (the game window wasn't visible). Press Auto-detect to try again.");
                 yield break;
             }
             PlayerPrefs.SetInt(DetectedKey, DetectVersion);
             PlayerPrefs.Save();
             Detecting = false;
             detectRoutine = null;
-            SetStatus("Auto-picked for this device: " + ResolutionLabel() + ", "
+            PowerManager.Reapply();
+            SetStatus("Auto-picked for this device: " + RenderOptionLabel(RenderIndex).Split(' ')[0] + " 3D, "
                       + (settings != null ? settings.QualityName : "") + ", " + Mathf.RoundToInt(Mathf.Min(fps, RefreshRate())) + " fps");
         }
 
@@ -447,7 +518,8 @@ namespace StarlitTides
         void WatchFrameRate()
         {
             GameManager game = GameManager.Instance;
-            if (Detecting || game == null || game.State != GameState.Playing || Time.timeScale < 0.9f) { missFrames = windowFrames = 0; missWindowStart = Time.unscaledTime; return; }
+            bool allowed = SettingsManager.Instance == null || SettingsManager.Instance.AdaptiveResolution;
+            if (!allowed || Detecting || game == null || game.State != GameState.Playing || Time.timeScale < 0.9f) { missFrames = windowFrames = 0; missWindowStart = Time.unscaledTime; return; }
             float budget = 1f / Mathf.Max(30f, Mathf.Min(60f, RefreshRate()));
             // Real time between frames (FramePacer may lock the game clock to the refresh rate).
             float dt = FramePacer.Instance != null ? FramePacer.RealDeltaTime : Time.unscaledDeltaTime;
@@ -459,11 +531,11 @@ namespace StarlitTides
             bool struggling = windowFrames > 0 && missFrames > windowFrames * 0.04f;
             missFrames = windowFrames = 0;
             missWindowStart = Time.unscaledTime;
-            if (!struggling || Time.unscaledTime - lastDrop < 12f || ScaleIndex >= Options.Count - 1 || Fraction(ScaleIndex + 1) < 0.5f) return;
+            if (!struggling || Time.unscaledTime - lastDrop < 12f || RenderIndex >= RenderFractions.Length - 1 || Fraction(RenderIndex + 1) < 0.5f) return;
             lastDrop = Time.unscaledTime;
-            SetScaleIndex(ScaleIndex + 1);
-            Debug.Log("[Starlit Tides] Frame rate dropping: resolution lowered to " + ResolutionLabel());
-            SetStatus("Lowered to " + ResolutionLabel() + " automatically to keep the game smooth");
+            SetRenderIndex(RenderIndex + 1);
+            Debug.Log("[Starlit Tides] Frame rate dropping: 3D resolution lowered to " + RenderOptionLabel(RenderIndex));
+            SetStatus("3D resolution lowered to " + RenderOptionLabel(RenderIndex).Split(' ')[0] + " to keep the game smooth (switch off in Settings)");
         }
 
         void SetStatus(string text)

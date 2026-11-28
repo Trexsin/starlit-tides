@@ -72,7 +72,7 @@ vercel env pull .env.local && vercel dev
 
 ## Use it from Unity
 
-Copy `Online/_StarlitTides/Scripts/Online/LeaderboardClient.cs` into the Unity project. Add the component to the Managers object and set **Base Url** to your deployment URL. Then:
+The Unity client is `StarlitTides/Assets/_StarlitTides/Scripts/Online/LeaderboardClient.cs` (already in the project). Add the component to the Managers object and set **Base Url** to your deployment URL. Then:
 
 ```csharp
 LeaderboardClient.Instance.SubmitScore("Mira", (ok, rank, error) => Debug.Log(ok ? $"Rank #{rank}" : error));

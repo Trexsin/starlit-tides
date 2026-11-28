@@ -24,7 +24,9 @@ namespace StarlitTides
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
         {
-            new GameObject("Shader Warmup").AddComponent<ShaderWarmup>();
+            var go = new GameObject("Shader Warmup");
+            DontDestroyOnLoad(go);   // (the render check keeps watching after a Retry)
+            go.AddComponent<ShaderWarmup>();
         }
 
         IEnumerator Start()
@@ -101,7 +103,28 @@ namespace StarlitTides
             Destroy(camGo);
             Destroy(holder);
             Debug.Log("[Starlit Tides] Shader warm-up: drew " + i + " prefabs in " + ((Time.realtimeSinceStartup - start) * 1000f).ToString("0") + " ms.");
-            Destroy(gameObject);
+
+            // Then keep watch: every few seconds, check that everything floating in the sea
+            // still has a working material and shader, and log the first problem of each
+            // kind (a broken material draws as a magenta shape and logs nothing by itself).
+            var reported = new HashSet<string>();
+            while (true)
+            {
+                yield return new WaitForSecondsRealtime(4f);
+                foreach (DriftingObject d in DriftingObject.Active)
+                {
+                    if (d == null) continue;
+                    foreach (Renderer r in d.GetComponentsInChildren<Renderer>())
+                    {
+                        if (!r.enabled) continue;
+                        Material m = r.sharedMaterial;
+                        string problem = m == null ? "no material" : m.shader == null ? "no shader" : !m.shader.isSupported ? "shader not supported (" + m.shader.name + ")" : null;
+                        if (problem == null) continue;
+                        string key = d.name + "/" + r.name + ":" + problem;
+                        if (reported.Add(key)) Debug.LogWarning("[Starlit Tides] Render check: " + key + (m != null ? " material " + m.name : ""));
+                    }
+                }
+            }
         }
 
         static void Add(HashSet<GameObject> set, GameObject g)

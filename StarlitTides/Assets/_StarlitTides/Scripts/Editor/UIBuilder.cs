@@ -394,7 +394,7 @@ namespace StarlitTides.EditorTools
             // The pop-up list: taller rows, readable text, dark glass.
             RectTransform template = dd.template;
             template.sizeDelta = new Vector2(0, 330);
-            template.GetComponent<Image>().color = new Color(0.03f, 0.07f, 0.15f, 0.97f);
+            template.GetComponent<Image>().color = new Color(0.03f, 0.07f, 0.15f, 1f);   // opaque: the values behind must not show through
             Transform item = template.Find("Viewport/Content/Item");
             RectTransform content = (RectTransform)template.Find("Viewport/Content");
             content.sizeDelta = new Vector2(0, 50);
@@ -424,15 +424,15 @@ namespace StarlitTides.EditorTools
             return dd;
         }
 
-        static Slider MakeSlider(string label, Transform parent, float y)
+        static Slider MakeSlider(string label, Transform parent, float y, float x = 0f)
         {
-            Label(label + " Label", parent, label, bodyFont, 30, TextColor, TextAlignmentOptions.Left, new Vector2(0.5f, 0.5f), new Vector2(-220, y), new Vector2(300, 50));
+            Label(label + " Label", parent, label, bodyFont, 30, TextColor, TextAlignmentOptions.Left, new Vector2(0.5f, 0.5f), new Vector2(x - 220, y), new Vector2(300, 50));
             GameObject go = DefaultControls.CreateSlider(uiResources);
             go.name = label + " Slider";
             go.transform.SetParent(parent, false);
             RectTransform rt = (RectTransform)go.transform;
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = new Vector2(150, y);
+            rt.anchoredPosition = new Vector2(x + 150, y);
             rt.sizeDelta = new Vector2(380, 24);
             Slider slider = go.GetComponent<Slider>();
             slider.minValue = 0f;
@@ -447,20 +447,20 @@ namespace StarlitTides.EditorTools
             return slider;
         }
 
-        static Toggle MakeToggle(string label, Transform parent, float y)
+        static Toggle MakeToggle(string label, Transform parent, float y, float x = -40f, float width = 520f, int fontSize = 30)
         {
             GameObject go = DefaultControls.CreateToggle(uiResources);
             go.name = label + " Toggle";
             go.transform.SetParent(parent, false);
             RectTransform rt = (RectTransform)go.transform;
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = new Vector2(-40, y);
-            rt.sizeDelta = new Vector2(520, 44);
+            rt.anchoredPosition = new Vector2(x, y);
+            rt.sizeDelta = new Vector2(width, 44);
 
             // Swap the default legacy label for a TextMeshPro one.
             Text legacy = go.GetComponentInChildren<Text>();
             if (legacy != null) Object.DestroyImmediate(legacy.gameObject);
-            Label("Label", rt, label, bodyFont, 30, TextColor, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), new Vector2(50, 0), new Vector2(460, 44));
+            Label("Label", rt, label, bodyFont, fontSize, TextColor, TextAlignmentOptions.Left, new Vector2(0f, 0.5f), new Vector2(50, 0), new Vector2(width - 60, 44));
 
             Transform background = go.transform.Find("Background");
             if (background != null)
@@ -536,6 +536,9 @@ namespace StarlitTides.EditorTools
             hud.meterFill = fill;
             hud.meterText = Label("Percent", meter, "100%", bodyFont, 46, TextColor, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), new Vector2(0, 6), new Vector2(160, 60));
             Label("Caption", meter, "LIGHT", titleFont, 18, Muted, TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), new Vector2(0, -34), new Vector2(160, 30)).characterSpacing = 8f;
+            // What a collision cost (HudView flashes it in and fades it out).
+            hud.damageText = Label("Damage", meter, "", titleFont, 30, new Color(1f, 0.45f, 0.42f), TextAlignmentOptions.Center, new Vector2(0.5f, 0.5f), new Vector2(0, -122), new Vector2(320, 44));
+            hud.damageText.color = new Color(1f, 0.45f, 0.42f, 0f);
 
             // Score, top-right.
             Vector2 topRight = new Vector2(1f, 1f);
@@ -647,39 +650,67 @@ namespace StarlitTides.EditorTools
 
         static CanvasGroup BuildSettings(Transform canvas)
         {
+            // Phase 9: two columns, every graphics and power choice is the player's.
             CanvasGroup screen = Screen("Settings", canvas);
             Transform t = screen.transform;
             Dim(t, 0.4f);
-            Panel("Panel", t, new Vector2(980, 900));
+            Panel("Panel", t, new Vector2(1620, 960));
             Vector2 c = new Vector2(0.5f, 0.5f);
-            Label("Title", t, "SETTINGS", titleFont, 60, Gold, TextAlignmentOptions.Center, c, new Vector2(0, 370), new Vector2(800, 80)).fontSharedMaterial = titleGlow;
+            Label("Title", t, "SETTINGS", titleFont, 56, Gold, TextAlignmentOptions.Center, c, new Vector2(0, 410), new Vector2(800, 76)).fontSharedMaterial = titleGlow;
 
             SettingsView view = t.gameObject.AddComponent<SettingsView>();
             ui.settingsView = view;
-            view.masterSlider = MakeSlider("Master volume", t, 280);
-            view.musicSlider = MakeSlider("Music", t, 215);
-            view.sfxSlider = MakeSlider("Effects", t, 150);
+            const float L = -400f, R = 400f;   // the two columns' centres
 
-            Label("Quality Label", t, "Graphics quality", bodyFont, 30, TextColor, TextAlignmentOptions.Left, c, new Vector2(-220, 80), new Vector2(300, 50));
-            view.qualityLeft = MakeButton("<", t, c, new Vector2(0, 80), new Vector2(60, 50), null, 30);
-            view.qualityText = Label("Quality", t, "HIGH", titleFont, 30, Gold, TextAlignmentOptions.Center, c, new Vector2(150, 80), new Vector2(220, 50));
-            view.qualityRight = MakeButton(">", t, c, new Vector2(300, 80), new Vector2(60, 50), null, 30);
+            // ---- GENERAL ----
+            Label("General Header", t, "GENERAL", titleFont, 26, Cyan, TextAlignmentOptions.Center, c, new Vector2(L, 335), new Vector2(700, 40));
+            view.masterSlider = MakeSlider("Master volume", t, 270, L);
+            view.musicSlider = MakeSlider("Music", t, 205, L);
+            view.sfxSlider = MakeSlider("Effects", t, 140, L);
+            const float tx = L - 50f, tw = 640f;   // toggles: the box lines up with the labels above
+            view.fullscreenToggle = MakeToggle("Fullscreen", t, 70, tx, tw, 28);
+            view.fpsToggle = MakeToggle("Show FPS counter", t, 15, tx, tw, 28);
+            view.introToggle = MakeToggle("Play the intro cinematic", t, -40, tx, tw, 28);
+            view.batterySaverToggle = MakeToggle("Battery saver when unplugged (30 fps)", t, -95, tx, tw, 28);
+            view.menuFpsToggle = MakeToggle("30 fps in menus (cooler)", t, -150, tx, tw, 28);
+            view.adaptiveToggle = MakeToggle("Lower 3D resolution if the game slows", t, -205, tx, tw, 28);
+            Label("Hint", t, "Keyboard: WASD / arrows, Space dash, Esc pause, P photo mode\nGamepad supported",
+                  bodyFont, 20, Muted, TextAlignmentOptions.Center, c, new Vector2(L, -290), new Vector2(720, 60));
 
-            // Resolution: the size the 3D world is rendered at (DisplayManager). The
-            // screen itself always runs at its native size, so the UI stays sharp.
-            Label("Resolution Label", t, "Resolution", bodyFont, 30, TextColor, TextAlignmentOptions.Left, c, new Vector2(-220, 12), new Vector2(300, 50));
-            view.resolutionDropdown = MakeDropdown("Resolution", t, c, new Vector2(150, 12), new Vector2(360, 52));
-            view.resolutionDetail = Label("Resolution Detail", t, "", bodyFont, 20, Muted, TextAlignmentOptions.Center, c, new Vector2(0, -32), new Vector2(860, 32));
+            // ---- GRAPHICS ----
+            Label("Graphics Header", t, "GRAPHICS", titleFont, 26, Cyan, TextAlignmentOptions.Center, c, new Vector2(R, 335), new Vector2(700, 40));
+            Label("Quality Label", t, "Quality preset", bodyFont, 28, TextColor, TextAlignmentOptions.Left, c, new Vector2(R - 200, 270), new Vector2(300, 50));
+            view.qualityLeft = MakeButton("<", t, c, new Vector2(R + 20, 270), new Vector2(56, 48), null, 28);
+            view.qualityText = Label("Quality", t, "HIGH", titleFont, 28, Gold, TextAlignmentOptions.Center, c, new Vector2(R + 170, 270), new Vector2(220, 50));
+            view.qualityRight = MakeButton(">", t, c, new Vector2(R + 320, 270), new Vector2(56, 48), null, 28);
 
-            view.fullscreenToggle = MakeToggle("Fullscreen", t, -85);
-            view.fpsToggle = MakeToggle("Show FPS counter", t, -140);
-            view.introToggle = MakeToggle("Play the intro cinematic", t, -195);
-            view.autoDetectButton = MakeButton("AUTO-DETECT BEST SETTINGS", t, c, new Vector2(0, -262), new Vector2(520, 54), null, 24);
+            view.resolutionDropdown = SettingsRow("Display resolution", t, R, 205);
+            view.renderDropdown = SettingsRow("3D resolution", t, R, 145);
+            view.antiAliasingDropdown = SettingsRow("Anti-aliasing", t, R, 85);
+            view.shadowsDropdown = SettingsRow("Shadows", t, R, 25);
+            view.reflectionsDropdown = SettingsRow("Reflections", t, R, -35);
+            view.colorDepthDropdown = SettingsRow("Colour depth", t, R, -95);
+            view.frameRateDropdown = SettingsRow("Frame rate", t, R, -155);
+            view.resolutionDetail = Label("Resolution Detail", t, "", bodyFont, 19, Muted, TextAlignmentOptions.Center, c, new Vector2(R, -205), new Vector2(760, 30));
+            view.autoDetectButton = MakeButton("AUTO-DETECT BEST SETTINGS", t, c, new Vector2(R, -268), new Vector2(520, 54), null, 24);
+            Label("Graphics Hint", t, "Lower settings run cooler and save battery. The preset resets shadows and reflections.",
+                  bodyFont, 18, Muted, TextAlignmentOptions.Center, c, new Vector2(R, -322), new Vector2(760, 30));
 
-            Label("Hint", t, "Keyboard: WASD / arrows, Space dash, Esc pause, P photo mode   \u2022   Gamepad supported",
-                  bodyFont, 20, Muted, TextAlignmentOptions.Center, c, new Vector2(0, -318), new Vector2(900, 40));
-            ui.settingsFirst = MakeButton("BACK", t, c, new Vector2(0, -375), new Vector2(320, 60), ui.CloseSettings);
+            // Changes wait for APPLY; BACK drops anything not applied (SettingsView).
+            view.applyStatus = Label("Apply Status", t, "", bodyFont, 21, Gold, TextAlignmentOptions.Center, c, new Vector2(0, -358), new Vector2(1200, 32));
+            view.applyButton = MakeButton("APPLY", t, c, new Vector2(-180, -405), new Vector2(320, 60), null);
+            ui.settingsFirst = MakeButton("BACK", t, c, new Vector2(180, -405), new Vector2(320, 60), ui.CloseSettings);
             return screen;
+        }
+
+        // One graphics row: a label on the left of the column, a dropdown on the right.
+        static TMP_Dropdown SettingsRow(string label, Transform parent, float columnX, float y)
+        {
+            Vector2 c = new Vector2(0.5f, 0.5f);
+            Label(label + " Label", parent, label, bodyFont, 28, TextColor, TextAlignmentOptions.Left, c, new Vector2(columnX - 200, y), new Vector2(300, 50));
+            TMP_Dropdown dd = MakeDropdown(label, parent, c, new Vector2(columnX + 170, y), new Vector2(360, 48));
+            dd.template.sizeDelta = new Vector2(0, 270);
+            return dd;
         }
 
         static CanvasGroup BuildPause(Transform canvas)
@@ -853,12 +884,14 @@ namespace StarlitTides.EditorTools
                 a.upscalingFilter = i == 0 ? UpscalingFilterSelection.FSR : UpscalingFilterSelection.Auto;
                 a.fsrOverrideSharpness = true;
                 a.fsrSharpness = 0.9f;
-                a.msaaSampleCount = i == 0 ? 1 : i == 1 ? 2 : 4;   // Low uses SMAA on the camera instead; Medium 2x (Phase 8, Step 6), High 4x
+                a.msaaSampleCount = 1;   // Phase 9: SMAA on the camera at every level (MSAA buffers cost ~50 MB and bandwidth on laptops)
                 // 64-bit HDR stops colour banding in the dark night gradients (sky, deep water).
-                a.hdrColorBufferPrecision = i == 2 ? HDRColorBufferPrecision._64Bits : HDRColorBufferPrecision._32Bits;
-                a.mainLightShadowmapResolution = i == 0 ? 1024 : i == 1 ? 2048 : 4096;
-                a.shadowDistance = i == 0 ? 40f : i == 1 ? 70f : 110f;
-                a.shadowCascadeCount = i == 0 ? 1 : i == 1 ? 2 : 4;
+                // Phase 9 (heat and memory on laptops): 32-bit HDR everywhere (the camera dithers
+                // to hide banding), and lighter shadows (they barely show in this night scene).
+                a.hdrColorBufferPrecision = HDRColorBufferPrecision._32Bits;
+                a.mainLightShadowmapResolution = i == 0 ? 512 : i == 1 ? 1024 : 2048;
+                a.shadowDistance = i == 0 ? 35f : i == 1 ? 50f : 70f;
+                a.shadowCascadeCount = i == 0 ? 1 : i == 1 ? 1 : 2;
                 SerializedObject so = new SerializedObject(a);
                 SerializedProperty soft = so.FindProperty("m_SoftShadowsSupported");
                 if (soft != null) soft.boolValue = i > 0;

@@ -220,6 +220,7 @@ namespace StarlitTides
                 SeaCreature d = Spawn<SeaCreature>(dolphin, p);
                 if (d != null) d.BeginBowRide(i == 0 ? side : -side, Random.Range(8f, 11f), 3f + i * 2.5f);
             }
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayCue(AudioManager.SeaCue.DolphinCall, new Vector3(BoatX + side * 5f, 0f, BoatZ), 0.8f);
             yield return new WaitForSeconds(9f);
         }
 
@@ -296,6 +297,7 @@ namespace StarlitTides
                 if (d == null) continue;
                 d.BeginCrossing(-side, speed, HoldFor(x, z, speed, ahead));
                 d.BeginPorpoising(i * 0.22f + Random.Range(0f, 0.1f), Random.Range(0.3f, 0.5f));
+                if (i == 0 && AudioManager.Instance != null) AudioManager.Instance.PlayCue(AudioManager.SeaCue.DolphinCall, d.transform.position);
             }
             yield return new WaitForSeconds(6.5f);
         }
@@ -329,6 +331,7 @@ namespace StarlitTides
                 pod.Add(o);
             }
             if (HudView.Instance != null) HudView.Instance.Popup("Orcas on the hunt!");
+            if (AudioManager.Instance != null && pod.Count > 0) AudioManager.Instance.PlayCue(AudioManager.SeaCue.OrcaCall, pod[0].transform.position);
             yield return new WaitForSeconds(2.6f + count * 0.35f + 0.7f + (Lane * 2f + 12f) / charge);
         }
 
@@ -347,6 +350,7 @@ namespace StarlitTides
                 pod.Add(o);
             }
             if (HudView.Instance != null) HudView.Instance.Popup("The pod lines up...");
+            if (AudioManager.Instance != null && pod.Count > 0) AudioManager.Instance.PlayCue(AudioManager.SeaCue.OrcaCall, pod[0].transform.position);
             yield return new WaitForSeconds(2.4f);
             foreach (SeaCreature o in pod) if (o != null && o.isActiveAndEnabled) o.BeginDive();   // ...and dives together
             yield return WashWave(-side, side * (Lane + 6f));
@@ -356,6 +360,7 @@ namespace StarlitTides
         // the boat sideways as it passes (no damage, but it can push you into things).
         IEnumerator WashWave(float dir, float startX)
         {
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayCue(AudioManager.SeaCue.WaveSweep, new Vector3(startX, 0f, BoatZ + 10f));
             float x = startX;
             float endX = -startX;
             bool pushed = false;
@@ -394,6 +399,7 @@ namespace StarlitTides
                     if ((prev - bx) * (x - bx) <= 0f)
                     {
                         pushed = true;
+                        if (AudioManager.Instance != null) AudioManager.Instance.PlayCue(AudioManager.SeaCue.WaveSweep, boat.transform.position, 0.8f);
                         if (!boat.IsDashing) boat.Push(new Vector3(dir * washPush, 0f, 0f));   // a dash cuts through the wave
                         if (VfxLibrary.Instance != null) VfxLibrary.Instance.Play(VfxLibrary.Instance.splash, boat.transform.position);
                     }

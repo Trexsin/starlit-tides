@@ -9,6 +9,11 @@
 //   2. the frame rate in every zone of the voyage (average, median and the
 //      slowest 1% of frames), at the current quality and resolution
 // and quits. It never writes the player's settings.
+//
+//   -starlitTour (with -starlitDiag): the release check. Photographs the main menu,
+//   the Settings screen and every zone of the voyage with the game's own screenshot
+//   (exactly what the player sees), counts every error, exception and failed
+//   assertion the game logged, and quits. Result line: "[Starlit Diag] TOUR RESULT".
 
 using System.Collections;
 using System.Collections.Generic;
@@ -28,9 +33,84 @@ namespace StarlitTides
             var go = new GameObject("Starlit Diagnostics");
             DontDestroyOnLoad(go);
             go.AddComponent<StarlitDiagnostics>();
+            Application.logMessageReceived += CountProblems;
+        }
+
+        // Every error / exception / assert logged while the diagnostics run.
+        static int problemCount;
+        static readonly List<string> problems = new List<string>();
+
+        static void CountProblems(string message, string stack, LogType type)
+        {
+            if (type != LogType.Error && type != LogType.Exception && type != LogType.Assert) return;
+            problemCount++;
+            if (problems.Count < 12) problems.Add(type + ": " + message + (string.IsNullOrEmpty(stack) ? "" : " @ " + stack.Split('\n')[0]));
         }
 
         static void Log(string s) { Debug.Log("[Starlit Diag] " + s); }
+
+        IEnumerator Tour()
+        {
+            string dir = System.IO.Path.GetDirectoryName(Application.consoleLogPath);
+            int shots = 0;
+            System.Func<string, IEnumerator> shot = name => Capture(dir, name, () => shots++);
+            UIManager ui = FindAnyObjectByType<UIManager>();
+
+            foreach (PlayableDirector d in FindObjectsByType<PlayableDirector>()) if (d.state == PlayState.Playing) d.Stop();
+            yield return new WaitForSecondsRealtime(2f);
+            yield return shot("tour_0_menu");
+            if (ui != null)
+            {
+                ui.OpenSettings();
+                yield return new WaitForSecondsRealtime(1.2f);
+                yield return shot("tour_1_settings");
+                SettingsView view = FindAnyObjectByType<SettingsView>();
+                if (view != null && view.shadowsDropdown != null)
+                {
+                    // A pending change (not applied): the APPLY button lights up.
+                    view.shadowsDropdown.value = 0;
+                    yield return new WaitForSecondsRealtime(0.4f);
+                    yield return shot("tour_2_settings_pending");
+                }
+                ui.CloseSettings();   // (drops the pending change)
+                yield return new WaitForSecondsRealtime(0.8f);
+            }
+
+            // PLAY, the way a player starts (fade, intro); the intro is skipped to save time.
+            if (ui != null) ui.Play();
+            yield return new WaitForSecondsRealtime(1.5f);
+            float wait = 0f;
+            while (GameManager.Instance != null && !GameManager.Instance.IsPlaying && wait < 12f)
+            {
+                foreach (PlayableDirector d in FindObjectsByType<PlayableDirector>()) if (d.state == PlayState.Playing) d.time = d.duration - 0.05;
+                wait += 0.25f;
+                yield return new WaitForSecondsRealtime(0.25f);
+            }
+            if (GameManager.Instance != null && !GameManager.Instance.IsPlaying) { Log("intro didn't hand over: starting the run directly"); GameManager.Instance.StartRun(); }
+            yield return new WaitForSecondsRealtime(1f);
+            VoyageDirector voyage = VoyageDirector.Instance;
+            int zones = voyage != null ? voyage.zones.Length : 1;
+            for (int z = 0; z < zones; z++)
+            {
+                if (voyage != null && z > 0) voyage.DebugJumpToZone(z);
+                float t0 = Time.realtimeSinceStartup;
+                while (Time.realtimeSinceStartup - t0 < 7f) { KeepAlive(); yield return null; }
+                yield return shot("tour_zone" + (z + 1) + "_" + (voyage != null ? voyage.Current.name.Replace(' ', '_') : "zone"));
+            }
+            MemoryCensus();
+            Log("TOUR RESULT: " + shots + " screenshots, " + problemCount + " errors/exceptions logged" + (problemCount == 0 ? " (clean)" : ""));
+            foreach (string p in problems) Log("   " + p);
+            yield return new WaitForSecondsRealtime(0.5f);
+            Application.Quit();
+        }
+
+        static IEnumerator Capture(string dir, string name, System.Action counted)
+        {
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, name + ".png"));
+            counted();
+            Log("screenshot " + name + ".png");
+            yield return new WaitForSecondsRealtime(0.4f);
+        }
 
         static string DisplayState(string label)
         {
@@ -55,6 +135,8 @@ namespace StarlitTides
             while (DisplayManager.Instance != null && DisplayManager.Instance.Detecting) yield return new WaitForSecondsRealtime(0.5f);
             Log(DisplayState("start"));
             Log("focused " + Application.isFocused + ", quality " + QualitySettings.names[QualitySettings.GetQualityLevel()] + ", resolution " + (DisplayManager.Instance != null ? DisplayManager.Instance.ResolutionLabel() : "?") + ", vSync " + QualitySettings.vSyncCount + ", targetFps " + Application.targetFrameRate);
+
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-starlitTour") >= 0) { yield return Tour(); yield break; }
 
             bool costOnly = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-starlitCost") >= 0;
             bool zonesOnly = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-starlitZones") >= 0;
@@ -90,12 +172,124 @@ namespace StarlitTides
 
             VoyageDirector voyage = VoyageDirector.Instance;
             int zones = voyage != null ? voyage.zones.Length : 1;
+            MemoryCensus();
+
+            // -starlitNatural: sail the end of Lantern Bay, cross into Glow Reef the normal way,
+            // wait for its real jellyfish bloom and photograph it (the case players saw magenta in).
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-starlitNatural") >= 0)
+            {
+                string logDir = System.IO.Path.GetDirectoryName(Application.consoleLogPath);
+                yield return new WaitForSecondsRealtime(4f);
+                if (voyage != null) typeof(VoyageDirector).GetProperty("ZoneTime").SetValue(voyage, voyage.CurrentDuration - 10f);
+                float waitStart = Time.realtimeSinceStartup;
+                while (Time.realtimeSinceStartup - waitStart < 40f && !(EncounterDirector.Instance != null && EncounterDirector.Instance.CurrentEncounter == EncounterKind.JellyBloom))
+                { KeepAlive(); yield return null; }
+                Log("bloom started: " + (EncounterDirector.Instance != null ? EncounterDirector.Instance.CurrentEncounter.ToString() : "?") + " zone " + (voyage != null ? voyage.Current.name : "?"));
+                for (int shot = 0; shot < 5; shot++)
+                {
+                    float t0 = Time.realtimeSinceStartup;
+                    while (Time.realtimeSinceStartup - t0 < 1.6f) { KeepAlive(); yield return null; }
+                    int jellies = 0, shown = 0;
+                    foreach (DriftingObject d in DriftingObject.Active)
+                    {
+                        if (!(d is Jellyfish)) continue;
+                        jellies++;
+                        foreach (Renderer r in d.GetComponentsInChildren<Renderer>(true))
+                        {
+                            Material m = r.sharedMaterial;
+                            if (shown < 6)
+                                Log("   " + d.name + "/" + r.name + " vis " + r.isVisible + " mat " + (m != null ? m.name : "NULL") + " shader " + (m != null && m.shader != null ? m.shader.name + " ok " + m.shader.isSupported : "NULL")
+                                    + " tex " + (m != null && m.HasProperty("_MainTex") ? (m.GetTexture("_MainTex") != null ? m.GetTexture("_MainTex").name : "MISSING") : "-")
+                                    + " pos " + d.transform.position.ToString("F1") + " scale " + r.transform.lossyScale.ToString("F2"));
+                        }
+                        shown++;
+                    }
+                    string path = System.IO.Path.Combine(logDir, "natural_" + shot + ".png");
+                    ScreenCapture.CaptureScreenshot(path);
+                    Log("screenshot natural_" + shot + " with " + jellies + " jellyfish");
+                }
+                Log("done");
+                yield return new WaitForSecondsRealtime(0.5f);
+                Application.Quit();
+                yield break;
+            }
+
+            // -starlitShot: jellyfish right in front of the boat, photographed by the game itself.
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-starlitShot") >= 0)
+            {
+                yield return new WaitForSecondsRealtime(3f);
+                // The boat's wake: sailing straight, then a hard sideways shove (turn spray).
+                {
+                    string logDir = System.IO.Path.GetDirectoryName(Application.consoleLogPath);
+                    ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(logDir, "wake_straight.png"));
+                    Log("screenshot wake_straight.png");
+                    yield return new WaitForSecondsRealtime(1f);
+                    if (BoatController.Instance != null) BoatController.Instance.Push(new Vector3(14f, 0f, 0f));
+                    yield return new WaitForSecondsRealtime(0.45f);
+                    ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(logDir, "wake_turn.png"));
+                    Log("screenshot wake_turn.png");
+                    yield return new WaitForSecondsRealtime(1.5f);
+                }
+                // Glow Reef with a full moon-jelly bloom ahead (the case that drew magenta squares).
+                if (voyage != null) voyage.DebugJumpToZone(1);
+                yield return new WaitForSecondsRealtime(2f);
+                EncounterDirector bloomDirector = EncounterDirector.Instance;
+                if (bloomDirector != null && bloomDirector.moonJelly != null)
+                {
+                    float boatZ0 = BoatController.Instance != null ? BoatController.Instance.transform.position.z : 0f;
+                    for (int j = 0; j < 25; j++)
+                    {
+                        Vector3 p = new Vector3(Random.Range(-20f, 20f), 0f, boatZ0 + Random.Range(25f, 60f));
+                        GameObject g = PoolManager.Spawn(bloomDirector.moonJelly, p, Quaternion.identity);
+                        Jellyfish jf = g != null ? g.GetComponent<Jellyfish>() : null;
+                        if (jf != null) jf.BeginDrift(new Vector3(0.8f, 0f, 0f));
+                    }
+                    yield return new WaitForSecondsRealtime(1f);
+                    string bloomPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Application.consoleLogPath), "jelly_bloom.png");
+                    ScreenCapture.CaptureScreenshot(bloomPath);
+                    Log("screenshot " + bloomPath);
+                    yield return new WaitForSecondsRealtime(1f);
+                }
+                EncounterDirector enc = EncounterDirector.Instance;
+                ObstacleSpawner spawner = FindAnyObjectByType<ObstacleSpawner>();
+                var shotPrefabs = new List<GameObject>();
+                if (enc != null) { shotPrefabs.Add(enc.moonJelly); shotPrefabs.Add(enc.lionsMane); }
+                if (spawner != null) foreach (GameObject g in spawner.jellyfishPrefabs) shotPrefabs.Add(g);
+                string dir = System.IO.Path.GetDirectoryName(Application.consoleLogPath);
+                for (int shot = 0; shot < 2; shot++)
+                {
+                    float bz = BoatController.Instance != null ? BoatController.Instance.transform.position.z : 0f;
+                    float x = -6f;
+                    foreach (GameObject prefab in shotPrefabs)
+                    {
+                        if (prefab == null) continue;
+                        GameObject go = PoolManager.Spawn(prefab, new Vector3(x, 0f, bz + 14f), Quaternion.identity);
+                        Log("shot spawn " + prefab.name + " at x " + x + " active " + (go != null && go.activeInHierarchy));
+                        foreach (Renderer r in go.GetComponentsInChildren<Renderer>(true))
+                        {
+                            Material m = r.sharedMaterial;
+                            string tex = m != null && m.HasProperty("_MainTex") ? (m.GetTexture("_MainTex") != null ? m.GetTexture("_MainTex").name : "MISSING") : "-";
+                            Log("   " + r.name + " enabled " + r.enabled + " material " + (m != null ? m.name : "NULL") + " shader " + (m != null ? m.shader.name + " supported " + m.shader.isSupported : "none") + " texture " + tex);
+                        }
+                        x += 6f;
+                    }
+                    yield return new WaitForSecondsRealtime(0.6f);
+                    string path = System.IO.Path.Combine(dir, "jelly_shot_" + shot + ".png");
+                    ScreenCapture.CaptureScreenshot(path);
+                    Log("screenshot " + path);
+                    yield return new WaitForSecondsRealtime(1.5f);
+                }
+                Log("done");
+                yield return new WaitForSecondsRealtime(0.5f);
+                Application.Quit();
+                yield break;
+            }
             for (int z = costOnly ? zones - 1 : 0; z < zones; z++)
             {
                 if (zonesOnly && voyage != null && z > 0)
                 {
                     // A REAL transition: skip to 8 s before the border and sail across it.
-                    typeof(VoyageDirector).GetProperty("ZoneTime").SetValue(voyage, voyage.Current.duration - 8f);
+                    typeof(VoyageDirector).GetProperty("ZoneTime").SetValue(voyage, voyage.CurrentDuration - 8f);
                     StartCoroutine(TraceTransition(16f, "zone " + (z + 1)));
                     yield return Measure(16f, "zone " + (z + 1) + " TRANSITION");
                 }
@@ -173,6 +367,34 @@ namespace StarlitTides
             Log(line.ToString());
         }
 
+        // What is actually in memory, by kind, and the biggest single items.
+        static void MemoryCensus()
+        {
+            var biggest = new List<KeyValuePair<long, string>>();
+            void Sum<T>(string label) where T : Object
+            {
+                long total = 0; int count = 0;
+                foreach (T o in Resources.FindObjectsOfTypeAll<T>())
+                {
+                    long b = UnityEngine.Profiling.Profiler.GetRuntimeMemorySizeLong(o);
+                    total += b; count++;
+                    biggest.Add(new KeyValuePair<long, string>(b, typeof(T).Name + " '" + o.name + "'"));
+                }
+                Log("census " + label + ": " + count + " objects, " + (total >> 20) + " MB");
+            }
+            Sum<RenderTexture>("render textures");
+            Sum<Texture2D>("textures");
+            Sum<Cubemap>("cubemaps");
+            Sum<Texture3D>("3D textures");
+            Sum<Mesh>("meshes");
+            Sum<AudioClip>("audio clips");
+            Sum<Shader>("shaders");
+            Sum<Material>("materials");
+            Sum<TerrainData>("terrain data");
+            biggest.Sort((x, y) => y.Key.CompareTo(x.Key));
+            for (int i = 0; i < Mathf.Min(12, biggest.Count); i++) Log("census biggest: " + (biggest[i].Key >> 20) + " MB " + biggest[i].Value);
+        }
+
         static IEnumerator MeasureAvg(float seconds, System.Action<float> done)
         {
             int frames = 0;
@@ -232,6 +454,8 @@ namespace StarlitTides
             float low1 = 1f / frames[Mathf.Min(frames.Count - 1, (int)(frames.Count * 0.99f))];
             int creatures = 0, total = 0;
             foreach (DriftingObject d in DriftingObject.Active) { total++; if (d is SeaCreature || d is Jellyfish) creatures++; }
+            Log(label + " memory: Unity allocated " + (UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong() >> 20) + " MB, reserved " + (UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong() >> 20)
+                + " MB, scripts heap " + (UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong() >> 20) + "/" + (UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong() >> 20) + " MB, graphics driver " + (UnityEngine.Profiling.Profiler.GetAllocatedMemoryForGraphicsDriver() >> 20) + " MB");
             Log(label + ": avg " + avg.ToString("0.0") + " fps, median " + median.ToString("0.0") + ", 1% low " + low1.ToString("0.0")
                 + " (" + frames.Count + " frames, " + total + " drifting objects, " + creatures + " creatures)");
         }

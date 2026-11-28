@@ -10,7 +10,7 @@ Time needed: about 45–60 minutes, most of it waiting for downloads.
 
 - **Unity 6000.5.10f1** (and 6000.5.9f1) is installed through Unity Hub. Use **6000.5.10f1** for everything. Don't open this project in 2022.3 later: the scripts in the next phases use Unity 6 APIs (Cinemachine 3, `Rigidbody.linearVelocity`, Build Profiles).
 - **Missing: Windows Build Support (Mono).** You need it to build the `.exe` on your Mac. Install it now (step 1) so it's ready for Phase 6.
-- This folder also contains an older C++/OpenGL version (`starlit_tides.cpp`). It is left untouched. The Unity project goes into its own subfolder.
+- The repository also contains an older C++/OpenGL version (`opengl-prototype/`). It is left untouched. The Unity project goes into its own subfolder.
 
 ---
 

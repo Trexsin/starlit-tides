@@ -39,6 +39,16 @@ namespace StarlitTides
             new Keyframe(0.7f, 0.7f),
             new Keyframe(1f, 1f, 0.6f, 0f));
 
+        [Header("Player speed control (Phase 9)")]
+        [Tooltip("Extra sea speed while holding forward (0.35 = +35%).")]
+        public float throttleBoost = 0.35f;
+        [Tooltip("Less sea speed while holding back (0.2 = -20%).")]
+        public float throttleBrake = 0.2f;
+        [Tooltip("Extra sea speed right after a forward dash (fades in ~0.7 s).")]
+        public float dashSurge = 0.6f;
+
+        float baseTide;
+
         // 0 = start of a run, 1 = hardest.
         public float Level { get; private set; }
 
@@ -55,6 +65,10 @@ namespace StarlitTides
         public float ObstacleInterval { get { return Voyage != null ? Voyage.FillerInterval / Mathf.Max(0.1f, FillerScale) : Mathf.Lerp(obstacleInterval.x, obstacleInterval.y, Level); } }
         public float OrbGroupInterval { get { return Voyage != null ? Voyage.OrbGroupInterval : Mathf.Lerp(orbGroupInterval.x, orbGroupInterval.y, Level); } }
         public float OrbValue { get { return Voyage != null ? Voyage.OrbValue : 0.12f; } }
+        /// <summary>Sideways spacing of chained orbs as a fraction of the boat's reach (voyage).</summary>
+        public Vector2 OrbReach { get { return Voyage != null ? Voyage.OrbReach : new Vector2(0.45f, 0.85f); } }
+        /// <summary>Seconds between chained orbs (voyage); 0 = the old group patterns.</summary>
+        public float OrbGap { get { return Voyage != null ? Voyage.OrbGap : 0f; } }
         public Vector2Int OrbsPerGroup { get { return Voyage != null ? Voyage.Current.orbsPerGroup : new Vector2Int(4, 7); } }
         public float JellyfishChance { get { return Voyage != null ? Voyage.Current.jellyChance : Mathf.Lerp(jellyfishChance.x, jellyfishChance.y, Level); } }
         public float LogChance { get { return Voyage != null ? Voyage.Current.logChance : Mathf.Lerp(logChance.x, logChance.y, Level); } }
@@ -104,7 +118,16 @@ namespace StarlitTides
 
             // Change speed gradually so it never feels like a jolt.
             // Gentle: a new zone's extra speed builds up over a few seconds (1.2 m/s per second).
-            ocean.tideSpeed = Mathf.MoveTowards(ocean.tideSpeed, target, 1.2f * Time.deltaTime);
+            baseTide = Mathf.MoveTowards(baseTide <= 0f ? ocean.tideSpeed : baseTide, target, 1.2f * Time.deltaTime);
+
+            // The player's throttle: holding forward makes the sea rush past up to 35% faster
+            // (you cover more distance, and score it), holding back slows it by up to 20%.
+            // A forward dash adds a short 60% surge. Both fade smoothly.
+            float mul = 1f;
+            BoatController boat = BoatController.Instance;
+            if (boat != null && game != null && game.State == GameState.Playing)
+                mul = 1f + Mathf.Max(0f, boat.Throttle) * throttleBoost - Mathf.Max(0f, -boat.Throttle) * throttleBrake + boat.Surge * dashSurge;
+            ocean.tideSpeed = baseTide * mul;
         }
     }
 }

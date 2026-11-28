@@ -35,8 +35,10 @@ namespace StarlitTides
         [Header("Dash")]
         public float dashSpeed = 27f;
         public float dashDuration = 0.18f;
-        public float dashCooldown = 1.1f;
-        public float dashInvulnerability = 0.3f;
+        [Tooltip("Seconds between dashes. Phase 9: 2.5 (was 1.1): with a dash every second players could dash through everything.")]
+        public float dashCooldown = 2.5f;
+        [Tooltip("Seconds you can't be hit at the start of a dash. Phase 9: 0.2 (was 0.3).")]
+        public float dashInvulnerability = 0.2f;
 
         [Header("Getting hit")]
         public float hitInvulnerability = 1.0f;
@@ -57,6 +59,10 @@ namespace StarlitTides
         /// <summary>A shove from outside (an orca's wave), fading out over ~0.5 s.</summary>
         public Vector3 ExternalVelocity { get { return externalVelocity; } }
         public bool IsDashing { get { return Time.time < dashEndTime; } }
+        /// <summary>-1..1, smoothed: holding forward speeds the whole sea up (DifficultyManager), back slows it.</summary>
+        public float Throttle { get; private set; }
+        /// <summary>1 right after a forward dash, fading to 0: a short burst of extra speed.</summary>
+        public float Surge { get; private set; }
         public bool IsInvulnerable { get { return Time.time < invulnerableUntil; } }
         // 0 right after a dash, 1 when the dash is ready again.
         public float DashCooldown01 { get { return Mathf.Clamp01((Time.time - lastDashTime) / dashCooldown); } }
@@ -95,6 +101,12 @@ namespace StarlitTides
             Vector2 input = Vector2.zero;
             if (StarlitInput.Instance != null) input = StarlitInput.Instance.Move;
 
+            // Throttle: forward/back input eases in and out (the sea speeds up or slows down).
+            bool canSteer = GameManager.Instance == null || GameManager.Instance.IsPlaying;
+            float wantThrottle = canSteer ? Mathf.Clamp(input.y, -1f, 1f) : 0f;
+            Throttle = Mathf.Lerp(Throttle, wantThrottle, 1f - Mathf.Exp(-4f * Time.deltaTime));
+            Surge = Mathf.MoveTowards(Surge, 0f, Time.deltaTime * 1.4f);
+
             TryDash(input);
             Steer(input);
             FloatAndTilt();
@@ -106,16 +118,22 @@ namespace StarlitTides
             if (StarlitInput.Instance == null || !StarlitInput.Instance.DashPressed) return;
             if (Time.time - lastDashTime < dashCooldown) return;
 
-            // Dash the way the player is steering. With no input, dash sideways
-            // in the direction we're already moving (or right if we're still).
+            // Dash the way the player is steering: left, right, forward, or diagonally.
+            // With no input, dash sideways the way we're already moving (or right if still).
             Vector3 direction = new Vector3(input.x, 0f, input.y);
             if (direction.sqrMagnitude < 0.01f)
             {
                 float side = velocity.x < 0f ? -1f : 1f;
-                direction = new Vector3(side, 0f, 0.3f);
+                direction = new Vector3(side, 0f, 0f);
             }
+            // Snap near-pure directions so W+Space is a clean forward dash and A/D+Space clean sideways.
+            if (Mathf.Abs(direction.x) < 0.3f) direction.x = 0f;
+            if (Mathf.Abs(direction.z) < 0.3f) direction.z = 0f;
+            if (direction.sqrMagnitude < 0.01f) direction = new Vector3(velocity.x < 0f ? -1f : 1f, 0f, 0f);
 
             dashDirection = direction.normalized;
+            // A forward dash is also a burst of speed: the whole sea rushes past faster for a moment.
+            if (dashDirection.z > 0.4f) Surge = 1f;
             lastDashTime = Time.time;
             dashEndTime = Time.time + dashDuration;
             invulnerableUntil = Mathf.Max(invulnerableUntil, Time.time + dashInvulnerability);

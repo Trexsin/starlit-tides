@@ -224,7 +224,6 @@ GameObject:
   - component: {fileID: 6154018615455283307}
   - component: {fileID: 6182416782846788255}
   - component: {fileID: 922160937288176814}
-  - component: {fileID: 2588649849798639178}
   m_Layer: 0
   m_Name: Rock_3
   m_TagString: Untagged
@@ -295,27 +294,3 @@ MonoBehaviour:
   rollSpeed: 0
   spinSpeed: 0
   sidewaysDrift: {x: 0, y: 0}
---- !u!114 &2588649849798639178
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6962497869936406463}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 75572a10d395c4e298c0ddf799fbe491, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.WaterDisturber
-  radius: 2.3
-  strength: 0.85
-  pulse: 0
-  pulseSpeed: 2
-  maxHeightAboveWater: 1.5
-  leaveTrail: 0
-  trailSpacing: 0.8
-  trailRadius: 1.2
-  trailStrength: 0.8
-  trailLife: 1.8
-  minTrailInterval: 0.07
-  strengthMultiplier: 1

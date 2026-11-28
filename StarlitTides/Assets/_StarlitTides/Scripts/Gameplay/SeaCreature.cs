@@ -203,6 +203,7 @@ namespace StarlitTides
             depth = targetDepth = -bodyLength;   // deep below the ring
             transform.rotation = Quaternion.Euler(-85f, Random.Range(0f, 360f), 0f);
             if (telegraph != null) telegraph.Play(true);
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayCue(AudioManager.SeaCue.BubbleNet, transform.position);   // bubbles rising
         }
 
         /// <summary>Dolphins: ride beside the boat on 'side' (+1/-1) for 'duration' seconds.</summary>
@@ -255,7 +256,11 @@ namespace StarlitTides
                     break;
                 case Phase.Surfacing:
                     solidPhase = depth > -0.6f;
-                    if (depth > -0.05f) { phase = Phase.Breathing; phaseTime = 0f; Splash(position, 0.5f); if (telegraph != null) telegraph.Stop(); }
+                    if (depth > -0.05f)
+                    {
+                        phase = Phase.Breathing; phaseTime = 0f; Splash(position, 0.5f); if (telegraph != null) telegraph.Stop();
+                        if (AudioManager.Instance != null) AudioManager.Instance.PlayCue(AudioManager.SeaCue.Breath, position);   // a soft breath
+                    }
                     break;
                 case Phase.Breathing:
                     pitch = Mathf.Sin(age * 1.7f + Seed) * 5f - 6f;   // head up to breathe
@@ -298,6 +303,7 @@ namespace StarlitTides
                         targetDepth = bodyLength * 0.33f - bodyLength * 0.5f;   // a third of the body clears the water
                         depthRate = bodyLength * 0.9f;
                         Splash(position, 2.2f);
+                        if (AudioManager.Instance != null) AudioManager.Instance.PlayCue(AudioManager.SeaCue.WhaleSong, position, 0.9f);
                         if (telegraph != null) telegraph.Stop();
                     }
                     break;
@@ -402,6 +408,13 @@ namespace StarlitTides
         void Splash(Vector3 at, float size)
         {
             Vector3 water = new Vector3(at.x, OceanController.Instance != null ? OceanController.Instance.GetWaterHeight(at) : 0f, at.z);
+            // A soft splash sound sized to the animal and the moment (dolphin leap ... whale lunge).
+            AudioManager audio = AudioManager.Instance;
+            if (audio != null)
+            {
+                float big = size * (bodyLength >= 10f ? 1.4f : bodyLength >= 5f ? 1.1f : 0.8f);
+                audio.PlayCue(big >= 1.8f ? AudioManager.SeaCue.BigSplash : big >= 0.85f ? AudioManager.SeaCue.MediumSplash : AudioManager.SeaCue.SmallSplash, water);
+            }
             if (VfxLibrary.Instance != null) VfxLibrary.Instance.Play(VfxLibrary.Instance.splash, water);
             if (OceanController.Instance != null) OceanController.Instance.AddRipple(water, 2.5f * size, 2f, 1.4f);
         }

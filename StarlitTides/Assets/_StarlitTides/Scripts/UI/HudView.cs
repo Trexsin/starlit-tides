@@ -19,6 +19,8 @@ namespace StarlitTides
         public Image meterFill;
         public Image meterGlow;
         public TextMeshProUGUI meterText;
+        [Tooltip("'-25% LIGHT' under the meter when the boat hits something.")]
+        public TextMeshProUGUI damageText;
 
         [Header("Score")]
         public TextMeshProUGUI scoreText;
@@ -50,6 +52,8 @@ namespace StarlitTides
         float popupTime = -10f;
         float fps;
         float bannerStart = -100f;
+        float damageTime = -100f;
+        LightMeter subscribed;
 
         void Awake()
         {
@@ -69,6 +73,7 @@ namespace StarlitTides
             WeatherManager.OnWeatherChanged += HandleWeather;
             WhaleEvent.OnWarning += HandleWhale;
             ComboSystem.OnComboEnded += HandleComboLost;
+            if (lightMeter != null) { lightMeter.OnDamaged += HandleDamage; subscribed = lightMeter; }
         }
 
         void OnDisable()
@@ -79,6 +84,14 @@ namespace StarlitTides
             WeatherManager.OnWeatherChanged -= HandleWeather;
             WhaleEvent.OnWarning -= HandleWhale;
             ComboSystem.OnComboEnded -= HandleComboLost;
+            if (subscribed != null) { subscribed.OnDamaged -= HandleDamage; subscribed = null; }
+        }
+
+        // A collision: flash the meter red and show what it cost.
+        void HandleDamage(float amount)
+        {
+            damageTime = Time.unscaledTime;
+            if (damageText != null) damageText.text = "-" + Mathf.RoundToInt(amount * 100f) + "% LIGHT";
         }
 
         void HandleNearMiss(int points) { Popup("NEAR MISS  +" + points); }
@@ -123,6 +136,19 @@ namespace StarlitTides
             if (lightMeter == null) return;
             float light = Mathf.Clamp01(lightMeter.SmoothValue);
             Color color = Color.Lerp(LowColor, FullColor, Mathf.InverseLerp(0.1f, 0.6f, light));
+
+            // Just hit: the ring flashes red and gives a little jolt, and "-25% LIGHT" fades out below it.
+            float hit = 1f - Mathf.Clamp01((Time.unscaledTime - damageTime) / 0.7f);
+            color = Color.Lerp(color, LowColor, hit);
+            meterFill.transform.parent.localScale = Vector3.one * (1f + 0.12f * hit * hit);
+            if (damageText != null)
+            {
+                float age = Time.unscaledTime - damageTime;
+                Color c = damageText.color;
+                c.a = age < 1.6f ? 1f - Mathf.Clamp01((age - 0.8f) / 0.8f) : 0f;
+                damageText.color = c;
+                damageText.rectTransform.anchoredPosition = new Vector2(0f, -122f - Mathf.Min(age, 1.6f) * 12f);
+            }
 
             meterFill.fillAmount = light;
             meterFill.color = color;

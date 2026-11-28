@@ -62,6 +62,10 @@ namespace StarlitTides
             public float orbValue = 0.1f;
             public float orbGroupInterval = 4.5f;
             public Vector2Int orbsPerGroup = new Vector2Int(4, 5);
+            [Tooltip("Seconds between orbs in a chain. Each orb is placed far enough sideways that reaching the next takes hard steering (combos are possible, but very hard).")]
+            public float orbGap = 1.3f;
+            [Tooltip("How far sideways the next orb in a chain is, as a fraction of the boat's real reach in the gap (min, max). Small early, large late.")]
+            public Vector2 orbReach = new Vector2(0.45f, 0.85f);
             [Tooltip("Seconds between filler rocks/logs.")]
             public float fillerInterval = 1f;
             [Range(0f, 1f)] public float logChance = 0.25f;
@@ -87,6 +91,14 @@ namespace StarlitTides
         }
 
         public Zone[] zones = DefaultZones();
+
+        [Header("Zone length (grows exponentially)")]
+        [Tooltip("Seconds the first zone lasts.")]
+        public float firstZoneDuration = 45f;
+        [Tooltip("Each zone lasts this much longer than the one before (1.25 = +25%).")]
+        public float durationGrowth = 1.25f;
+        [Tooltip("No zone lasts longer than this (seconds).")]
+        public float maxZoneDuration = 300f;
         [Tooltip("Calm seconds at the start of each zone (after the first).")]
         public float restDuration = 5f;
         [Tooltip("Zone the voyage loops back to after the last one.")]
@@ -113,13 +125,17 @@ namespace StarlitTides
         public bool InRest { get { return Stage > 0 && ZoneTime < restDuration; } }
         public bool Active { get { GameManager g = GameManager.Instance; return g != null && g.State == GameState.Playing; } }
         /// <summary>0 at the start of a run, 1 at Aurora Deep, above 1 in later voyages.</summary>
-        public float Progress { get { return (Stage + Mathf.Clamp01(ZoneTime / Mathf.Max(1f, Current.duration))) / Mathf.Max(1f, zones.Length - 1f); } }
+        public float Progress { get { return (Stage + Mathf.Clamp01(ZoneTime / Mathf.Max(1f, CurrentDuration))) / Mathf.Max(1f, zones.Length - 1f); } }
+        /// <summary>How long the current zone lasts: 45 s, 56, 70, 88, 110, 137 ... (x1.25 each time), up to 5 minutes.</summary>
+        public float CurrentDuration { get { return Mathf.Min(maxZoneDuration, firstZoneDuration * Mathf.Pow(durationGrowth, Stage)); } }
 
         // Loop bonus: each voyage after the first is faster and denser.
         int Loop { get { return Mathf.Max(0, Voyage - 1); } }
         public float TideSpeed { get { return Mathf.Min(maxTide, Current.tideSpeed + Loop * loopTideBonus); } }
-        public float DrainPerSecond { get { return Current.drainPerSecond + Loop * 0.006f; } }
-        public float OrbValue { get { return Mathf.Max(0.05f, Current.orbValue - Loop * 0.005f); } }
+        public float DrainPerSecond { get { return Current.drainPerSecond + Loop * 0.004f; } }
+        public float OrbGap { get { return Mathf.Max(0.85f, Current.orbGap - Loop * 0.03f); } }
+        public Vector2 OrbReach { get { return new Vector2(Mathf.Min(0.6f, Current.orbReach.x + Loop * 0.03f), Mathf.Min(0.92f, Current.orbReach.y + Loop * 0.03f)); } }
+        public float OrbValue { get { return Mathf.Max(0.06f, Current.orbValue - Loop * 0.004f); } }
         public float OrbGroupInterval { get { return Current.orbGroupInterval; } }
         public float FillerInterval { get { return Mathf.Max(0.42f, Current.fillerInterval - Loop * 0.06f); } }
         public float EncounterGap { get { return Mathf.Max(2.5f, Current.encounterGap - Loop * 0.6f); } }
@@ -153,8 +169,11 @@ namespace StarlitTides
         void OnDestroy()
         {
             if (Instance == this) Instance = null;
+            // Only put the shared sea material back (so the editor never saves runtime colours).
+            // Don't touch the coast or the reflection probe here: on a restart the whole scene
+            // is being destroyed, and asking the probe to re-render then (time-sliced over the
+            // next frames) crashed the player in native code once the probe was gone.
             RestoreSea();
-            ResetCoast();
         }
 
         void OnEnable()
@@ -231,8 +250,8 @@ namespace StarlitTides
                 ZoneTime += Time.deltaTime;
                 // Start turning the look toward the next zone a little before the border.
                 Zone upcoming = zones[NextIndex()];
-                if (ZoneTime >= Current.duration - transitionLead && lookTo != upcoming) BeginLook(upcoming);
-                if (ZoneTime >= Current.duration) NextZone();
+                if (ZoneTime >= CurrentDuration - transitionLead && lookTo != upcoming) BeginLook(upcoming);
+                if (ZoneTime >= CurrentDuration) NextZone();
             }
 
             UpdateLook(game, playing);
@@ -440,70 +459,70 @@ namespace StarlitTides
                 new Zone
                 {
                     name = "Lantern Bay", subtitle = "Find your way out of the harbour", duration = 45f,
-                    tideSpeed = 8f, drainPerSecond = 0.04f, orbValue = 0.1f, orbGroupInterval = 4.5f, orbsPerGroup = new Vector2Int(4, 5),
-                    fillerInterval = 1.0f, logChance = 0.3f, jellyChance = 0f,
+                    tideSpeed = 8f, drainPerSecond = 0.034f, orbValue = 0.12f, orbGap = 1.1f, orbReach = new Vector2(0.2f, 0.45f),
+                    fillerInterval = 1.25f, logChance = 0.3f, jellyChance = 0f,
                     encounters = new[] { E(EncounterKind.BowRiders, 1f) }, encounterGap = 14f, hiddenOrbs = true,
                     customLook = false, weather = Weather.Calm, sunset = 0f, ambientAurora = 0.15f, scenerySet = 0,
                 },
                 new Zone
                 {
                     name = "Glow Reef", subtitle = "Jellyfish blooms drift with the current", duration = 50f,
-                    tideSpeed = 10f, drainPerSecond = 0.045f, orbValue = 0.095f, orbGroupInterval = 4.2f, orbsPerGroup = new Vector2Int(3, 5),
-                    fillerInterval = 0.95f, logChance = 0.15f, jellyChance = 0.12f,
+                    tideSpeed = 10f, drainPerSecond = 0.039f, orbValue = 0.115f, orbGap = 1.1f, orbReach = new Vector2(0.25f, 0.55f),
+                    fillerInterval = 1.05f, logChance = 0.15f, jellyChance = 0.12f,
                     encounters = new[] { E(EncounterKind.JellyBloom, 3f), E(EncounterKind.TurtleSurfacing, 2f) }, encounterGap = 7f,
                     customLook = true, weather = Weather.Calm, sunset = 0f, ambientAurora = 0.55f, scenerySet = 1,
                     atmosphere = Atmo(new Color(0.03f, 0.13f, 0.15f), 0.0009f, new Color(0.12f, 0.42f, 0.46f), new Color(0.08f, 0.26f, 0.3f),
                                       new Color(0.02f, 0.05f, 0.05f), new Color(0.6f, 1f, 0.92f), 1.45f),
-                    seaShallow = new Color(0.02f, 0.55f, 0.5f), seaDeep = new Color(0f, 0.06f, 0.08f), seaHorizon = new Color(0.04f, 0.2f, 0.22f),
-                    seaNear = new Color(0.02f, 0.46f, 0.42f), seaFoam = new Color(0.5f, 1.1f, 0.85f),
-                    seaBio = new Color(0.2f, 3.3f, 1.8f), seaBio2 = new Color(3.0f, 0.6f, 2.2f),
+                    seaShallow = new Color(0f, 0.72f, 0.62f), seaDeep = new Color(0f, 0.08f, 0.1f), seaHorizon = new Color(0.03f, 0.26f, 0.28f),
+                    seaNear = new Color(0f, 0.58f, 0.52f), seaFoam = new Color(0.55f, 1.2f, 0.9f),
+                    seaBio = new Color(0.2f, 4.2f, 2.2f), seaBio2 = new Color(3.8f, 0.7f, 2.8f),
                 },
                 new Zone
                 {
                     name = "Sunset Channel", subtitle = "Dolphin pods race across the channel", duration = 50f,
-                    tideSpeed = 12f, drainPerSecond = 0.05f, orbValue = 0.09f, orbGroupInterval = 4.0f, orbsPerGroup = new Vector2Int(3, 5),
+                    tideSpeed = 12f, drainPerSecond = 0.043f, orbValue = 0.11f, orbGap = 1.1f, orbReach = new Vector2(0.3f, 0.62f),
                     fillerInterval = 0.9f, logChance = 0.3f, jellyChance = 0.05f,
                     encounters = new[] { E(EncounterKind.DolphinPod, 3f), E(EncounterKind.MantaGlide, 2f), E(EncounterKind.BowRiders, 0.7f), E(EncounterKind.JellyBloom, 0.8f) },
                     encounterGap = 6f,
-                    customLook = true, weather = Weather.Calm, sunset = 0.8f, ambientAurora = 0f, scenerySet = 2,
+                    customLook = true, weather = Weather.Calm, sunset = 0.7f, ambientAurora = 0f, scenerySet = 2,
                     atmosphere = Atmo(new Color(0.22f, 0.1f, 0.24f), 0.0009f, new Color(0.35f, 0.22f, 0.5f), new Color(0.5f, 0.24f, 0.32f),
                                       new Color(0.08f, 0.04f, 0.06f), new Color(1f, 0.6f, 0.45f), 1.4f),
-                    seaShallow = new Color(0.24f, 0.09f, 0.34f), seaDeep = new Color(0.05f, 0.012f, 0.09f), seaHorizon = new Color(0.42f, 0.15f, 0.28f),
-                    seaNear = new Color(0.17f, 0.07f, 0.28f), seaFoam = new Color(1.0f, 0.7f, 0.58f),
-                    seaBio = new Color(3.4f, 1.3f, 0.4f), seaBio2 = new Color(3.2f, 0.35f, 2.0f),
+                    seaShallow = new Color(0.3f, 0.07f, 0.4f), seaDeep = new Color(0.05f, 0.008f, 0.11f), seaHorizon = new Color(0.62f, 0.2f, 0.32f),
+                    seaNear = new Color(0.2f, 0.05f, 0.32f), seaFoam = new Color(1.1f, 0.72f, 0.55f),
+                    seaBio = new Color(4.2f, 1.6f, 0.4f), seaBio2 = new Color(4.0f, 0.4f, 2.6f),
                 },
                 new Zone
                 {
                     name = "Orca Strait", subtitle = "A pod of orcas is hunting", duration = 55f,
-                    tideSpeed = 14f, drainPerSecond = 0.055f, orbValue = 0.08f, orbGroupInterval = 3.8f, orbsPerGroup = new Vector2Int(3, 4),
+                    tideSpeed = 14f, drainPerSecond = 0.046f, orbValue = 0.105f, orbGap = 1.1f, orbReach = new Vector2(0.35f, 0.7f),
                     fillerInterval = 0.85f, logChance = 0.1f, jellyChance = 0.04f,
                     encounters = new[] { E(EncounterKind.OrcaHunt, 3f), E(EncounterKind.OrcaWaveWash, 2f), E(EncounterKind.DolphinPod, 1f) },
                     encounterGap = 6f,
                     customLook = true, weather = Weather.Aurora, sunset = 0f, ambientAurora = 0.8f, scenerySet = 3,
                     atmosphere = Atmo(new Color(0.06f, 0.08f, 0.2f), 0.0008f, new Color(0.3f, 0.36f, 0.72f), new Color(0.18f, 0.2f, 0.42f),
                                       new Color(0.03f, 0.04f, 0.07f), new Color(0.75f, 0.86f, 1.1f), 1.7f),
-                    seaShallow = new Color(0.15f, 0.46f, 0.66f), seaDeep = new Color(0.01f, 0.03f, 0.1f), seaHorizon = new Color(0.12f, 0.15f, 0.36f),
-                    seaNear = new Color(0.1f, 0.4f, 0.6f), seaFoam = new Color(0.85f, 0.97f, 1.15f),
-                    seaBio = new Color(0.6f, 1.9f, 3.5f), seaBio2 = new Color(1.9f, 0.6f, 3.5f),
+                    seaShallow = new Color(0.08f, 0.52f, 0.88f), seaDeep = new Color(0.01f, 0.03f, 0.13f), seaHorizon = new Color(0.12f, 0.18f, 0.45f),
+                    seaNear = new Color(0.05f, 0.45f, 0.8f), seaFoam = new Color(0.9f, 1.0f, 1.2f),
+                    seaBio = new Color(0.6f, 2.6f, 4.6f), seaBio2 = new Color(2.6f, 0.7f, 4.4f),
                 },
                 new Zone
                 {
                     name = "Storm Reach", subtitle = "Humpbacks feed beneath the storm", duration = 55f,
-                    tideSpeed = 16f, drainPerSecond = 0.06f, orbValue = 0.075f, orbGroupInterval = 3.6f, orbsPerGroup = new Vector2Int(3, 4),
+                    tideSpeed = 16f, drainPerSecond = 0.048f, orbValue = 0.1f, orbGap = 1.1f, orbReach = new Vector2(0.4f, 0.78f),
                     fillerInterval = 0.75f, logChance = 0.25f, jellyChance = 0.06f,
                     encounters = new[] { E(EncounterKind.HumpbackLunge, 3f), E(EncounterKind.LionsMane, 2f), E(EncounterKind.GiantWhale, 1f), E(EncounterKind.OrcaHunt, 0.8f) },
                     encounterGap = 5f,
                     customLook = true, weather = Weather.Storm, sunset = 0f, ambientAurora = 0f, scenerySet = 4,
                     atmosphere = Atmo(new Color(0.05f, 0.06f, 0.1f), 0.0012f, new Color(0.1f, 0.13f, 0.24f), new Color(0.07f, 0.08f, 0.14f),
                                       new Color(0.02f, 0.02f, 0.03f), new Color(0.6f, 0.7f, 0.95f), 0.9f),
-                    seaShallow = new Color(0.08f, 0.3f, 0.42f), seaDeep = new Color(0.01f, 0.025f, 0.06f), seaHorizon = new Color(0.1f, 0.12f, 0.22f),
-                    seaNear = new Color(0.06f, 0.27f, 0.38f), seaFoam = new Color(0.75f, 0.92f, 1.2f),
-                    seaBio = new Color(0.5f, 2.2f, 4.2f), seaBio2 = new Color(3.0f, 0.6f, 4.0f),
+                    seaShallow = new Color(0.1f, 0.3f, 0.62f), seaDeep = new Color(0.01f, 0.02f, 0.08f), seaHorizon = new Color(0.14f, 0.12f, 0.3f),
+                    seaNear = new Color(0.07f, 0.28f, 0.56f), seaFoam = new Color(0.8f, 0.95f, 1.25f),
+                    seaBio = new Color(0.6f, 2.8f, 5.2f), seaBio2 = new Color(3.8f, 0.7f, 5.0f),
                 },
                 new Zone
                 {
                     name = "Aurora Deep", subtitle = "Everything that lives in the sea, under the lights", duration = 60f,
-                    tideSpeed = 18f, drainPerSecond = 0.065f, orbValue = 0.07f, orbGroupInterval = 3.4f, orbsPerGroup = new Vector2Int(3, 4),
+                    tideSpeed = 18f, drainPerSecond = 0.053f, orbValue = 0.1f, orbGap = 1.1f, orbReach = new Vector2(0.45f, 0.85f),
                     fillerInterval = 0.7f, logChance = 0.2f, jellyChance = 0.06f,
                     encounters = new[]
                     {
@@ -515,9 +534,9 @@ namespace StarlitTides
                     customLook = true, weather = Weather.Aurora, sunset = 0f, ambientAurora = 1f, scenerySet = 5,
                     atmosphere = Atmo(new Color(0.05f, 0.08f, 0.17f), 0.0008f, new Color(0.26f, 0.42f, 0.58f), new Color(0.2f, 0.18f, 0.4f),
                                       new Color(0.03f, 0.05f, 0.06f), new Color(0.75f, 1f, 0.95f), 1.6f),
-                    seaShallow = new Color(0.1f, 0.5f, 0.46f), seaDeep = new Color(0.01f, 0.03f, 0.08f), seaHorizon = new Color(0.16f, 0.12f, 0.32f),
-                    seaNear = new Color(0.06f, 0.42f, 0.4f), seaFoam = new Color(0.75f, 1.1f, 0.95f),
-                    seaBio = new Color(0.3f, 3.5f, 1.6f), seaBio2 = new Color(3.5f, 0.5f, 2.7f),
+                    seaShallow = new Color(0.03f, 0.62f, 0.55f), seaDeep = new Color(0.01f, 0.04f, 0.1f), seaHorizon = new Color(0.2f, 0.12f, 0.4f),
+                    seaNear = new Color(0.02f, 0.52f, 0.48f), seaFoam = new Color(0.8f, 1.15f, 1.0f),
+                    seaBio = new Color(0.3f, 4.4f, 2.0f), seaBio2 = new Color(4.2f, 0.6f, 3.4f),
                 },
             };
         }

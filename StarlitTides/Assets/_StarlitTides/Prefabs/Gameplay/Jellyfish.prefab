@@ -146,7 +146,6 @@ GameObject:
   m_Component:
   - component: {fileID: 6886950086738486845}
   - component: {fileID: 174558022636755659}
-  - component: {fileID: 452472797310360103}
   - component: {fileID: 4685354528672809207}
   m_Layer: 0
   m_Name: Jellyfish
@@ -193,30 +192,6 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.85
   m_Center: {x: 0, y: -0.1, z: 0}
---- !u!114 &452472797310360103
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6853214208691141947}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 75572a10d395c4e298c0ddf799fbe491, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::StarlitTides.WaterDisturber
-  radius: 2
-  strength: 0.9
-  pulse: 0
-  pulseSpeed: 2
-  maxHeightAboveWater: 2.5
-  leaveTrail: 0
-  trailSpacing: 0.8
-  trailRadius: 1.2
-  trailStrength: 0.8
-  trailLife: 1.8
-  minTrailInterval: 0.07
-  strengthMultiplier: 1
 --- !u!114 &4685354528672809207
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -248,7 +223,7 @@ MonoBehaviour:
   swimFrequency: 0.6
   glowLight: {fileID: 8390376452344754807}
   glowLightBase: 1.2
-  waterGlow: {fileID: 452472797310360103}
+  waterGlow: {fileID: 0}
 --- !u!1 &6906261193900754220
 GameObject:
   m_ObjectHideFlags: 0

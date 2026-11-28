@@ -73,8 +73,20 @@ namespace StarlitTides
                 whale.rotation = Quaternion.LookRotation(dir.normalized, Vector3.up) * Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(0f, 110f, t));
 
             float surface = OceanController.Instance != null ? OceanController.Instance.GetWaterHeight(position) : 0f;
-            if (!splashedOut && position.y > surface - 2f) { splashedOut = true; Splash(position, 0.8f); }
-            if (splashedOut && !splashedIn && t > 0.62f && position.y < surface + 1f) { splashedIn = true; Splash(position, 1.6f); }
+            if (!splashedOut && position.y > surface - 2f)
+            {
+                splashedOut = true; Splash(position, 0.8f);
+                if (AudioManager.Instance != null)
+                {
+                    AudioManager.Instance.PlayCue(AudioManager.SeaCue.WhaleSong, position, 0.8f);
+                    AudioManager.Instance.PlayCue(AudioManager.SeaCue.MediumSplash, position);
+                }
+            }
+            if (splashedOut && !splashedIn && t > 0.62f && position.y < surface + 1f)
+            {
+                splashedIn = true; Splash(position, 1.6f);
+                if (AudioManager.Instance != null) AudioManager.Instance.PlayCue(AudioManager.SeaCue.BigSplash, position);   // the deep whoomp of the landing
+            }
         }
 
         void Splash(Vector3 at, float size)
